@@ -77,13 +77,12 @@ def submit_annotation(
 
     db.commit()
     db.refresh(annotation)
-    db.refresh(task)
 
     background_tasks.add_task(jobs.compute_consensus, task_id)
 
     return AnnotationSubmissionResponse(
         annotation=AnnotationResponse.model_validate(annotation),
-        task_status=task.status,
+        task_status=new_status,
     )
 
 
