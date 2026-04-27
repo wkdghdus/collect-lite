@@ -5,7 +5,17 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import annotations, datasets, exports, metrics, projects, reviews, tasks
+from app.routers import (
+    annotations,
+    consensus,
+    datasets,
+    exports,
+    metrics,
+    projects,
+    reviews,
+    suggestions,
+    tasks,
+)
 
 
 @asynccontextmanager
@@ -46,6 +56,8 @@ app.include_router(projects.router, prefix="/api")
 app.include_router(datasets.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(annotations.router, prefix="/api")
+app.include_router(suggestions.router, prefix="/api")
+app.include_router(consensus.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(exports.router, prefix="/api")
