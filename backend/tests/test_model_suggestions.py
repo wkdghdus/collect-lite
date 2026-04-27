@@ -1,6 +1,7 @@
 """Tests for POST /api/tasks/{task_id}/suggestion and the underlying service."""
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -267,3 +268,49 @@ def test_local_suggestion_deterministic() -> None:
     a = _local_suggestion("alpha beta", "alpha gamma")
     b = _local_suggestion("alpha beta", "alpha gamma")
     assert a == b
+
+
+# T11 — GET /api/tasks/{task_id}/suggestions: empty list for a fresh task
+def test_list_suggestions_empty(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_task(db_session)
+    response = client.get(f"/api/tasks/{seeded['task'].id}/suggestions")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# T12 — GET returns suggestions ordered newest-first
+def test_list_suggestions_orders_newest_first(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_task(db_session)
+    older = ModelSuggestion(
+        task_id=seeded["task"].id,
+        provider="local",
+        model_name="lexical_overlap",
+        suggestion={"relevance": "not_relevant"},
+        confidence=0.1,
+        created_at=datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    newer = ModelSuggestion(
+        task_id=seeded["task"].id,
+        provider="local",
+        model_name="lexical_overlap",
+        suggestion={"relevance": "relevant"},
+        confidence=0.9,
+        created_at=datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc) + timedelta(seconds=5),
+    )
+    db_session.add_all([older, newer])
+    db_session.commit()
+
+    response = client.get(f"/api/tasks/{seeded['task'].id}/suggestions")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["id"] == str(newer.id)
+    assert body[1]["id"] == str(older.id)
+    assert body[0]["suggestion"]["relevance"] == "relevant"
+
+
+# T13 — GET 404 for unknown task
+def test_list_suggestions_404_unknown_task(client: TestClient) -> None:
+    response = client.get(f"/api/tasks/{uuid.uuid4()}/suggestions")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
