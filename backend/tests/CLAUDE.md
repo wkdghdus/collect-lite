@@ -25,7 +25,7 @@ pytest suite for the FastAPI backend. Run from `backend/`.
 | `test_datasets.py` | Dataset upload (CSV + JSONL, pointwise + pairwise expansion, validation, dedupe counts) and list assertions |
 | `test_tasks.py` | Task generation and next-task route existence |
 | `test_annotations.py` | Annotation submit and skip route existence |
-| `test_consensus.py` | Pure-function unit tests for `compute_majority_vote`, `compute_agreement_score` |
+| `test_consensus.py` | Pure-function unit tests for `compute_majority_vote`, `compute_agreement_score` plus DB-backed `compute_consensus` flow tests (full/partial agreement, model agree/disagree, latest-suggestion selection, label-key fallback, idempotent upsert, no-op cases, wrapper delegation) |
 | `test_exports.py` | Export create and status route existence |
 | `test_relationships.py` | ORM relationship round-trip + `Project` cascade-delete down the Dataset → SourceExample → Task chain |
 

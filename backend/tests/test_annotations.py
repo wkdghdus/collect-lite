@@ -202,9 +202,11 @@ def test_threshold_annotation_marks_submitted(client: TestClient, db_session: Se
     )
 
     assert response.status_code == 201
+    # Route returns the synchronous post-submit status; consensus then runs
+    # in the background and (since 1/1 == full agreement, no model) resolves the task.
     assert response.json()["task_status"] == "submitted"
     db_session.expire_all()
-    assert db_session.get(Task, seeded["task"].id).status == "submitted"
+    assert db_session.get(Task, seeded["task"].id).status == "resolved"
 
 
 def test_assignment_already_submitted_returns_409(client: TestClient, db_session: Session) -> None:

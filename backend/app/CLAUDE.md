@@ -24,7 +24,15 @@ FastAPI application package.
 created → suggested → assigned → submitted → needs_review → resolved → exported
 created → assigned  (when skipping suggestion step)
 submitted → needs_review → resolved  (disagreement path)
+submitted → resolved                 (auto-resolve path; consensus has full agreement)
 ```
+
+The `submitted → resolved` and `submitted → needs_review` transitions are driven by
+`services/consensus.compute_consensus`, scheduled as a background task by
+`routers/annotations.submit_annotation` once the human annotation pool is full
+(`len(annotations) >= task.required_annotations`). Full human + model agreement
+auto-resolves; any disagreement (or a model suggestion that does not match the
+majority) routes the task to `needs_review`.
 
 Return **409 Conflict** on invalid transitions. Never skip states.
 
