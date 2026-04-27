@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "modified=$(git -C \"$PWD\" diff --name-only HEAD 2>/dev/null | grep -v 'CLAUDE\\.md'); if [ -n \"$modified\" ]; then echo \"REMINDER: Source files changed ($modified). Verify all relevant CLAUDE.md files reflect these changes before finishing.\"; fi"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "branch=$(git -C \"$PWD\" branch --show-current 2>/dev/null); uncommitted=$(git -C \"$PWD\" status --porcelain 2>/dev/null); unpushed=$(git -C \"$PWD\" log origin/${branch}..HEAD --oneline 2>/dev/null); if [ -n \"$uncommitted\" ] || [ -n \"$unpushed\" ]; then echo \"REMINDER: Uncommitted or unpushed work detected. All tasks must be pushed to GitHub using conventional commits (feat:, fix:, docs:, refactor:, test:, chore:) separated by task.\"; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
