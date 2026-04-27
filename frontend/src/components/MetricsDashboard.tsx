@@ -1,3 +1,5 @@
+import { MetricsCard } from "@/components/MetricsCard";
+
 interface Metrics {
   tasks_total: number;
   tasks_resolved: number;
@@ -22,16 +24,18 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
     { label: "Review Backlog", value: metrics.review_backlog },
     { label: "Agreement Rate", value: `${(metrics.agreement_rate * 100).toFixed(1)}%` },
     { label: "Gold Accuracy", value: `${(metrics.gold_accuracy * 100).toFixed(1)}%` },
-    { label: "Model-Human Disagreement", value: `${(metrics.model_human_disagreement_rate * 100).toFixed(1)}%` },
+    {
+      label: "Model-Human Disagreement",
+      value: `${(metrics.model_human_disagreement_rate * 100).toFixed(1)}%`,
+    },
   ];
   return (
     <div className="grid grid-cols-3 gap-4">
       {cards.map(({ label, value }) => (
-        <div key={label} className="rounded-xl border p-6">
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold mt-1">{value}</p>
-        </div>
+        <MetricsCard key={label} label={label} value={value} />
       ))}
     </div>
   );
 }
+
+export default MetricsDashboard;
