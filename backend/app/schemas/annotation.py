@@ -1,15 +1,19 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class RelevanceLabel(BaseModel):
+    relevance: Literal["relevant", "partially_relevant", "not_relevant"]
 
 
 class AnnotationCreate(BaseModel):
-    label: dict
-    confidence: int | None = None
+    assignment_id: uuid.UUID
+    label: RelevanceLabel
+    confidence: int | None = Field(default=None, ge=1, le=5)
     notes: str | None = None
-    model_suggestion_visible: bool = True
-    latency_ms: int | None = None
 
 
 class AnnotationResponse(BaseModel):
@@ -25,3 +29,8 @@ class AnnotationResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AnnotationSubmissionResponse(BaseModel):
+    annotation: AnnotationResponse
+    task_status: str
