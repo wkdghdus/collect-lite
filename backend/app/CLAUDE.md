@@ -14,7 +14,7 @@ FastAPI application package.
 |---------|---------|
 | `models/` | 14 SQLAlchemy ORM models (one file per domain: user, project, dataset, task, annotation, quality, export, audit) |
 | `schemas/` | Pydantic v2 request/response models matching each router |
-| `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks` + `tasks.get_task` (GET `/tasks/{task_id}` returns a `TaskDetailResponse` with embedded source-payload fields, latest model suggestion, and annotation summaries) + `tasks.create_task_suggestion` (POST `/tasks/{task_id}/suggestion`), `suggestions.list_suggestions` (GET `/tasks/{task_id}/suggestions`, newest-first), and `annotations.submit_annotation` are implemented; the batch `POST /projects/{project_id}/tasks/suggest`, the plural batch `POST /tasks/{task_id}/suggestions`, `tasks.get_next_task`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
+| `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks` + `tasks.get_task` (GET `/tasks/{task_id}` returns a `TaskDetailResponse` with embedded source-payload fields, latest model suggestion, and annotation summaries) + `tasks.create_task_suggestion` (POST `/tasks/{task_id}/suggestion`), `suggestions.list_suggestions` (GET `/tasks/{task_id}/suggestions`, newest-first), `annotations.submit_annotation`, and `reviews.list_review_tasks` (GET `/projects/{project_id}/review/tasks`) + `reviews.submit_review` (POST `/tasks/{task_id}/review`) are implemented; the batch `POST /projects/{project_id}/tasks/suggest`, the plural batch `POST /tasks/{task_id}/suggestions`, `tasks.get_next_task`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
 | `services/` | Business logic called by routers (ingestion, task_generation, assignment, model_suggestions, cohere_service, consensus, review, export, audit) |
 | `workers/` | `jobs.py` — FastAPI BackgroundTasks wrappers for async jobs |
 
@@ -37,6 +37,15 @@ The `submitted → resolved` and `submitted → needs_review` transitions are dr
 (`len(annotations) >= task.required_annotations`). Full human + model agreement
 auto-resolves; any disagreement (or a model suggestion that does not match the
 majority) routes the task to `needs_review`.
+
+The `needs_review → resolved` transition is driven by
+`services/review.submit_review_decision` via `POST /tasks/{task_id}/review`. The
+service inserts a `ReviewDecision` row, updates the latest `ConsensusResult`
+(`final_label` set to the reviewer's choice, `status='review_resolved'`), sets
+`task.status='resolved'`, and emits a `task.review_submitted` audit event via
+`services/audit.log_event`. The request body's `reviewer_id` is optional — when
+omitted, the service lazily reuses (or creates) a singleton system reviewer
+(`email='system-reviewer@collectlite.local'`, `role='reviewer'`).
 
 Return **409 Conflict** on invalid transitions. Never skip states.
 

@@ -29,6 +29,7 @@ pytest suite for the FastAPI backend. Run from `backend/`.
 | `test_model_suggestions.py` | Route + service tests for `POST /tasks/{task_id}/suggestion`: cohere/local-fallback branching, Jaccard threshold mapping, `created → suggested` status transition (and non-transitions), 409 on terminal status, 404 on unknown task, 422 on missing payload fields, `lexical_overlap_score` pure-function unit tests, determinism |
 | `test_exports.py` | Export create and status route existence |
 | `test_relationships.py` | ORM relationship round-trip + `Project` cascade-delete down the Dataset → SourceExample → Task chain |
+| `test_reviews.py` | Behavioral tests for `GET /projects/{project_id}/review/tasks` and `POST /tasks/{task_id}/review`: queue filter (only `needs_review` in target project, ordered newest-first, full detail shape with consensus block), submit (creates `ReviewDecision`, sets `Task.status='resolved'`, updates `ConsensusResult.final_label` + `status='review_resolved'`, emits `task.review_submitted` audit event), reviewer fallback (singleton system reviewer when `reviewer_id` is omitted), 422 on invalid `final_label`, 404 on unknown task / project / reviewer, 409 on resolved/exported and pre-review states |
 
 ## Conventions
 
