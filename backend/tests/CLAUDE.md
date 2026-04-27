@@ -14,13 +14,15 @@ pytest suite for the FastAPI backend. Run from `backend/`.
   - `raise_server_exceptions=False` is required: router stubs raise `NotImplementedError` which
     FastAPI propagates as an unhandled exception; this flag converts it to a 500 response instead
     of crashing the transport
+- `db_session` — direct `TestingSessionLocal()` handle for asserting DB state after a request
+  (e.g. inspecting `SourceExample` rows the upload route created)
 
 ## Test Files
 
 | File | Scope |
 |------|-------|
 | `test_projects.py` | `/health` endpoint + full project create/list/get-by-id behavioral assertions |
-| `test_datasets.py` | Dataset upload and list route existence |
+| `test_datasets.py` | Dataset upload (CSV + JSONL, pointwise + pairwise expansion, validation, dedupe counts) and list assertions |
 | `test_tasks.py` | Task generation and next-task route existence |
 | `test_annotations.py` | Annotation submit and skip route existence |
 | `test_consensus.py` | Pure-function unit tests for `compute_majority_vote`, `compute_agreement_score` |

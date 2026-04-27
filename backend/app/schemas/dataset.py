@@ -16,6 +16,14 @@ class DatasetResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DatasetUploadResponse(DatasetResponse):
+    inserted_count: int
+    skipped_duplicate_count: int
+    existing_duplicate_count: int
+    total_input_rows: int
+    total_normalized_examples: int
+
+
 class SourceExampleResponse(BaseModel):
     id: uuid.UUID
     dataset_id: uuid.UUID
