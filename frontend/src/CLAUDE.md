@@ -13,7 +13,7 @@
 | `/projects/[projectId]/review` | `.../review/page.tsx` | Reviewer disagreement queue |
 | `/projects/[projectId]/metrics` | `.../metrics/page.tsx` | Project metrics tiles |
 | `/projects/[projectId]/exports` | `.../exports/page.tsx` | Per-project export creation + status polling |
-| `/tasks/[taskId]` | `app/tasks/[taskId]/page.tsx` | Annotation workbench for a single task |
+| `/tasks/[taskId]` | `app/tasks/[taskId]/page.tsx` | Annotation workbench — also fetches `GET /api/tasks/{task_id}/suggestions` and posts `POST /api/tasks/{task_id}/suggestion` to render/generate model suggestions via `ModelSuggestionPanel` |
 | `/annotate` | `app/annotate/page.tsx` | Legacy global annotator workbench (kept untouched; superseded by `/tasks/[taskId]`) |
 | `/exports` | `app/exports/page.tsx` | Legacy global exports page (kept untouched; superseded by `/projects/[projectId]/exports`) |
 | `api/auth/[...nextauth]` | `app/api/auth/.../route.ts` | NextAuth credentials handler |
