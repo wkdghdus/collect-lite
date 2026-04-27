@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base, get_db
 from app.main import app
+from app.workers import jobs as jobs_module
 
 
 # Teach SQLite how to handle PostgreSQL-specific types
@@ -18,6 +19,12 @@ def compile_jsonb_sqlite(type_, compiler, **kw):
 TEST_DB_URL = "sqlite:///./test.db"
 engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Background-task workers open their own session via app.db.SessionLocal, which
+# bypasses the dependency_overrides path used for request handlers. Repoint the
+# worker module to the test engine so BackgroundTasks write to the same DB the
+# test session reads from.
+jobs_module.SessionLocal = TestingSessionLocal
 
 
 @pytest.fixture(autouse=True)
