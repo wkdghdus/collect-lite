@@ -1,12 +1,21 @@
+import json
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.models.project import Project
 from app.models.task import Task, TaskTemplate
-from app.schemas.task import ModelSuggestionResponse, TaskGenerateRequest, TaskResponse
+from app.schemas.task import (
+    AnnotationSummary,
+    ModelSuggestionPayload,
+    ModelSuggestionResponse,
+    TaskDetailResponse,
+    TaskGenerateRequest,
+    TaskResponse,
+)
 from app.services.model_suggestions import (
     PayloadInvalidError,
     TaskNotFoundError,
@@ -14,6 +23,25 @@ from app.services.model_suggestions import (
     generate_suggestion_for_task,
 )
 from app.workers import jobs
+
+
+def _as_dict(value: Any) -> dict:
+    """Coerce a JSONB column into a dict.
+
+    SQLite (test infra) compiles JSONB to TEXT, so values may round-trip as
+    JSON-encoded strings instead of dicts. Returns ``{}`` on anything that
+    cannot be parsed into a dict.
+    """
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
 
 router = APIRouter(tags=["tasks"])
 
@@ -73,9 +101,51 @@ def get_next_task(db: Session = Depends(get_db)):
     raise NotImplementedError
 
 
-@router.get("/tasks/{task_id}", response_model=TaskResponse)
+@router.get("/tasks/{task_id}", response_model=TaskDetailResponse)
 def get_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
-    raise NotImplementedError
+    task = (
+        db.query(Task)
+        .options(
+            selectinload(Task.example),
+            selectinload(Task.model_suggestions),
+            selectinload(Task.annotations),
+        )
+        .filter(Task.id == task_id)
+        .first()
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    payload = _as_dict(task.example.payload if task.example else {})
+
+    latest = max(task.model_suggestions, key=lambda s: s.created_at, default=None)
+    suggestion_payload: ModelSuggestionPayload | None = None
+    if latest is not None:
+        s_dict = _as_dict(latest.suggestion)
+        suggestion_payload = ModelSuggestionPayload(
+            provider=latest.provider,
+            model_name=latest.model_name,
+            score=float(latest.confidence) if latest.confidence is not None else None,
+            suggested_label=s_dict.get("relevance") or s_dict.get("label"),
+            created_at=latest.created_at,
+        )
+
+    annotations_summary = sorted(
+        (AnnotationSummary.model_validate(a) for a in task.annotations),
+        key=lambda a: a.created_at,
+    )
+
+    return TaskDetailResponse(
+        **TaskResponse.model_validate(task).model_dump(),
+        source_example_id=task.example_id,
+        dataset_id=task.example.dataset_id if task.example else None,
+        query=str(payload.get("query", "")),
+        candidate_document=str(payload.get("candidate_document", "")),
+        document_id=payload.get("document_id"),
+        example_metadata=payload.get("metadata") or {},
+        model_suggestion=suggestion_payload,
+        annotations=annotations_summary,
+    )
 
 
 @router.post(
