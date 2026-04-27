@@ -15,7 +15,7 @@ FastAPI application package.
 | `models/` | 14 SQLAlchemy ORM models (one file per domain: user, project, dataset, task, annotation, quality, export, audit) |
 | `schemas/` | Pydantic v2 request/response models matching each router |
 | `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks`, and `annotations.submit_annotation` are implemented; the rest of `tasks.py`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
-| `services/` | Business logic called by routers (ingestion, task_generation, assignment, model_suggestions, consensus, review, export, audit) |
+| `services/` | Business logic called by routers (ingestion, task_generation, assignment, model_suggestions, cohere_service, consensus, review, export, audit) |
 | `workers/` | `jobs.py` — FastAPI BackgroundTasks wrappers for async jobs |
 
 ## Task State Machine
