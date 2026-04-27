@@ -19,7 +19,7 @@ pytest suite for the FastAPI backend. Run from `backend/`.
 
 | File | Scope |
 |------|-------|
-| `test_projects.py` | `/health` endpoint + project CRUD route existence |
+| `test_projects.py` | `/health` endpoint + full project create/list/get-by-id behavioral assertions |
 | `test_datasets.py` | Dataset upload and list route existence |
 | `test_tasks.py` | Task generation and next-task route existence |
 | `test_annotations.py` | Annotation submit and skip route existence |
@@ -29,6 +29,7 @@ pytest suite for the FastAPI backend. Run from `backend/`.
 
 ## Conventions
 
-- Route existence tests: `assert response.status_code in (expected_2xx, 500)` — stubs return 500
+- Route existence tests (stubbed routers): `assert response.status_code in (expected_2xx, 500)` — stubs return 500
+- Behavioral tests (implemented routers, e.g. `projects`): assert exact status codes and response bodies
 - Pure logic tests (consensus): import service function directly, no `client` fixture needed
-- Do **not** mock the DB for route tests — `TestClient` exercises the real app stack
+- Do **not** mock the DB for route tests — `conftest.py` swaps in a SQLite test DB via `dependency_overrides[get_db]` and a JSONB→TEXT compile shim, so `TestClient` exercises the real app stack against ephemeral tables
