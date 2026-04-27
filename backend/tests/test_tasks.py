@@ -140,3 +140,66 @@ def test_generate_tasks_400_for_wrong_task_type(client: TestClient, db_session: 
     )
 
     assert response.status_code == 400
+
+
+def test_list_project_tasks_empty(client: TestClient, db_session: Session) -> None:
+    project = _seed_project(db_session)
+    response = client.get(f"/api/projects/{project.id}/tasks")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_project_tasks_returns_seeded_tasks(
+    client: TestClient, db_session: Session
+) -> None:
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    _seed_examples(db_session, project.id, count=3)
+
+    other_project = _seed_project(db_session)
+    other_template = _seed_template(db_session, other_project.id)
+    _seed_examples(db_session, other_project.id, count=1, hash_prefix="other")
+
+    client.post(
+        f"/api/projects/{project.id}/tasks/generate",
+        json={"template_id": str(template.id), "required_annotations": 2},
+    )
+    client.post(
+        f"/api/projects/{other_project.id}/tasks/generate",
+        json={"template_id": str(other_template.id), "required_annotations": 2},
+    )
+
+    response = client.get(f"/api/projects/{project.id}/tasks")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 3
+    assert {t["project_id"] for t in body} == {str(project.id)}
+    timestamps = [t["created_at"] for t in body]
+    assert timestamps == sorted(timestamps, reverse=True)
+
+
+def test_list_project_tasks_status_filter(
+    client: TestClient, db_session: Session
+) -> None:
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    examples = _seed_examples(db_session, project.id, count=3)
+
+    client.post(
+        f"/api/projects/{project.id}/tasks/generate",
+        json={"template_id": str(template.id), "required_annotations": 2},
+    )
+
+    one = db_session.query(Task).filter(Task.example_id == examples[0].id).one()
+    one.status = "assigned"
+    db_session.commit()
+
+    created = client.get(f"/api/projects/{project.id}/tasks?status=created")
+    assert created.status_code == 200
+    assert len(created.json()) == 2
+    assert all(t["status"] == "created" for t in created.json())
+
+    assigned = client.get(f"/api/projects/{project.id}/tasks?status=assigned")
+    assert assigned.status_code == 200
+    assert len(assigned.json()) == 1
+    assert assigned.json()[0]["status"] == "assigned"

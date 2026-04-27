@@ -5,11 +5,23 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.project import Project
-from app.models.task import TaskTemplate
+from app.models.task import Task, TaskTemplate
 from app.schemas.task import TaskGenerateRequest, TaskResponse
 from app.workers import jobs
 
 router = APIRouter(tags=["tasks"])
+
+
+@router.get("/projects/{project_id}/tasks", response_model=list[TaskResponse])
+def list_project_tasks(
+    project_id: uuid.UUID,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Task).filter(Task.project_id == project_id)
+    if status is not None:
+        query = query.filter(Task.status == status)
+    return query.order_by(Task.created_at.desc()).all()
 
 
 @router.post("/projects/{project_id}/tasks/generate", status_code=202)
