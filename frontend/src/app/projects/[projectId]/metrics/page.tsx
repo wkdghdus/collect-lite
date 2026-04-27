@@ -1,23 +1,41 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { AppShell } from "@/components/AppShell";
+import { MetricsDashboard } from "@/components/MetricsDashboard";
+
+interface ProjectMetrics {
+  tasks_total: number;
+  tasks_resolved: number;
+  review_backlog: number;
+  agreement_rate: number;
+  gold_accuracy: number;
+  model_human_disagreement_rate: number;
+  avg_annotation_latency_ms: number;
+}
+
 export default function MetricsPage({ params }: { params: { projectId: string } }) {
+  const { projectId } = params;
+
+  const { data, isLoading, isError, error } = useQuery<ProjectMetrics>({
+    queryKey: ["metrics", projectId],
+    queryFn: () => api.get<ProjectMetrics>(`/api/projects/${projectId}/metrics`),
+    retry: false,
+  });
+
   return (
-    <main className="container mx-auto p-8">
-      <h1 className="text-2xl font-semibold mb-8">Metrics</h1>
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        {[
-          { label: "Agreement Rate", value: "—" },
-          { label: "Gold Accuracy", value: "—" },
-          { label: "Model-Human Disagreement", value: "—" },
-          { label: "Review Backlog", value: "0" },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-xl border p-6">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="text-3xl font-bold mt-1">{value}</p>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-xl border p-12 text-center text-muted-foreground">
-        Charts will render here once annotation data is available.
-      </div>
-    </main>
+    <AppShell projectId={projectId} section="Metrics">
+      <h1 className="text-2xl font-semibold mb-6">Metrics</h1>
+      {isLoading ? (
+        <div className="text-center text-muted-foreground p-12">Loading metrics…</div>
+      ) : isError ? (
+        <p className="text-destructive">
+          Failed to load metrics: {error instanceof Error ? error.message : "Unknown error"}
+        </p>
+      ) : (
+        <MetricsDashboard metrics={data ?? null} />
+      )}
+    </AppShell>
   );
 }

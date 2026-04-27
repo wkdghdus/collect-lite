@@ -1,17 +1,84 @@
+"use client";
+
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { AppShell } from "@/components/AppShell";
+import { MetricsCard } from "@/components/MetricsCard";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import type { ProjectResponse } from "@/lib/schemas/project";
+
+interface ProjectMetrics {
+  tasks_total?: number;
+  tasks_resolved?: number;
+  review_backlog?: number;
+}
+
+const SECTIONS = [
+  { slug: "datasets", title: "Datasets", desc: "Upload CSV / JSONL data" },
+  { slug: "tasks", title: "Tasks", desc: "Generate and run task queue" },
+  { slug: "review", title: "Review", desc: "Resolve disagreements" },
+  { slug: "metrics", title: "Metrics", desc: "Agreement, accuracy, latency" },
+  { slug: "exports", title: "Exports", desc: "Create and download exports" },
+];
+
 export default function ProjectDetailPage({ params }: { params: { projectId: string } }) {
+  const { projectId } = params;
+
+  const projectQuery = useQuery<ProjectResponse>({
+    queryKey: ["projects", projectId],
+    queryFn: () => api.get<ProjectResponse>(`/api/projects/${projectId}`),
+  });
+
+  const metricsQuery = useQuery<ProjectMetrics>({
+    queryKey: ["metrics", projectId],
+    queryFn: () => api.get<ProjectMetrics>(`/api/projects/${projectId}/metrics`),
+    retry: false,
+  });
+
+  const project = projectQuery.data;
+  const metrics = metricsQuery.data;
+  const resolvedPct =
+    metrics?.tasks_total && metrics?.tasks_resolved
+      ? `${((metrics.tasks_resolved / metrics.tasks_total) * 100).toFixed(0)}%`
+      : "—";
+
   return (
-    <main className="container mx-auto p-8">
-      <h1 className="text-2xl font-semibold mb-2">Project</h1>
-      <p className="text-sm text-muted-foreground mb-8">ID: {params.projectId}</p>
-      <nav className="flex gap-4 mb-8 text-sm">
-        <a href="datasets" className="hover:underline">Datasets</a>
-        <a href="tasks" className="hover:underline">Tasks</a>
-        <a href="review" className="hover:underline">Review Queue</a>
-        <a href="metrics" className="hover:underline">Metrics</a>
-      </nav>
-      <div className="rounded-xl border p-8 text-muted-foreground text-center">
-        Project overview coming soon.
-      </div>
-    </main>
+    <AppShell projectId={projectId} section="Overview">
+      {projectQuery.isLoading ? (
+        <p className="text-muted-foreground">Loading project…</p>
+      ) : projectQuery.isError ? (
+        <p className="text-destructive">Failed to load project.</p>
+      ) : project ? (
+        <>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-semibold">{project.name}</h1>
+            <Badge>{project.status}</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mb-8">{project.task_type}</p>
+
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <MetricsCard label="Tasks Total" value={metrics?.tasks_total ?? "—"} />
+            <MetricsCard label="Pending Review" value={metrics?.review_backlog ?? "—"} />
+            <MetricsCard label="Resolved" value={resolvedPct} />
+          </div>
+
+          <h2 className="text-lg font-semibold mb-3">Sections</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {SECTIONS.map((s) => (
+              <Link key={s.slug} href={`/projects/${projectId}/${s.slug}`}>
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <CardTitle className="text-base mb-1">{s.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{s.desc}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </AppShell>
   );
 }
