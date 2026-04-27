@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.project import Project
 from app.models.task import Task, TaskTemplate
-from app.schemas.task import TaskGenerateRequest, TaskResponse
+from app.schemas.task import ModelSuggestionResponse, TaskGenerateRequest, TaskResponse
+from app.services.model_suggestions import (
+    PayloadInvalidError,
+    TaskNotFoundError,
+    TaskTerminalError,
+    generate_suggestion_for_task,
+)
 from app.workers import jobs
 
 router = APIRouter(tags=["tasks"])
@@ -70,3 +76,25 @@ def get_next_task(db: Session = Depends(get_db)):
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
 def get_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
     raise NotImplementedError
+
+
+@router.post(
+    "/tasks/{task_id}/suggestion",
+    response_model=ModelSuggestionResponse,
+    status_code=201,
+)
+def create_task_suggestion(task_id: uuid.UUID, db: Session = Depends(get_db)):
+    try:
+        return generate_suggestion_for_task(db, task_id)
+    except TaskNotFoundError:
+        raise HTTPException(status_code=404, detail="Task not found")
+    except TaskTerminalError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Task is {e.status}; cannot generate a new suggestion",
+        )
+    except PayloadInvalidError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Source example is missing required fields: {', '.join(e.missing)}",
+        )

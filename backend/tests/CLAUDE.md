@@ -26,6 +26,7 @@ pytest suite for the FastAPI backend. Run from `backend/`.
 | `test_tasks.py` | Task generation and next-task route existence |
 | `test_annotations.py` | Annotation submit and skip route existence |
 | `test_consensus.py` | Pure-function unit tests for `compute_majority_vote`, `compute_agreement_score` plus DB-backed `compute_consensus` flow tests (full/partial agreement, model agree/disagree, latest-suggestion selection, label-key fallback, idempotent upsert, no-op cases, wrapper delegation) |
+| `test_model_suggestions.py` | Route + service tests for `POST /tasks/{task_id}/suggestion`: cohere/local-fallback branching, Jaccard threshold mapping, `created → suggested` status transition (and non-transitions), 409 on terminal status, 404 on unknown task, 422 on missing payload fields, `lexical_overlap_score` pure-function unit tests, determinism |
 | `test_exports.py` | Export create and status route existence |
 | `test_relationships.py` | ORM relationship round-trip + `Project` cascade-delete down the Dataset → SourceExample → Task chain |
 

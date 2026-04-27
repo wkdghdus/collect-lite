@@ -27,3 +27,16 @@ class TaskResponse(BaseModel):
 class TaskGenerateRequest(BaseModel):
     template_id: uuid.UUID
     required_annotations: int = 2
+
+
+class ModelSuggestionResponse(BaseModel):
+    id: uuid.UUID
+    task_id: uuid.UUID
+    provider: str
+    model_name: str
+    suggestion: dict
+    confidence: float | None
+    raw_response: dict | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

@@ -14,7 +14,7 @@ FastAPI application package.
 |---------|---------|
 | `models/` | 14 SQLAlchemy ORM models (one file per domain: user, project, dataset, task, annotation, quality, export, audit) |
 | `schemas/` | Pydantic v2 request/response models matching each router |
-| `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks`, and `annotations.submit_annotation` are implemented; the rest of `tasks.py`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
+| `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks` + `tasks.create_task_suggestion` (POST `/tasks/{task_id}/suggestion`), and `annotations.submit_annotation` are implemented; the batch `POST /projects/{project_id}/tasks/suggest`, `tasks.get_next_task`, `tasks.get_task`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
 | `services/` | Business logic called by routers (ingestion, task_generation, assignment, model_suggestions, cohere_service, consensus, review, export, audit) |
 | `workers/` | `jobs.py` — FastAPI BackgroundTasks wrappers for async jobs |
 
@@ -26,6 +26,10 @@ created → assigned  (when skipping suggestion step)
 submitted → needs_review → resolved  (disagreement path)
 submitted → resolved                 (auto-resolve path; consensus has full agreement)
 ```
+
+The `created → suggested` transition is driven by `services/model_suggestions.generate_suggestion_for_task`
+via `POST /tasks/{task_id}/suggestion` (Cohere Rerank when `COHERE_API_KEY` is set, Jaccard
+lexical-overlap fallback otherwise).
 
 The `submitted → resolved` and `submitted → needs_review` transitions are driven by
 `services/consensus.compute_consensus`, scheduled as a background task by
