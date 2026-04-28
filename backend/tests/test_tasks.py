@@ -51,9 +51,141 @@ def _seed_examples(db: Session, project_id: uuid.UUID, count: int, hash_prefix: 
     return dataset, examples
 
 
-def test_get_next_task_route_exists(client: TestClient) -> None:
+def _seed_task(
+    db: Session,
+    project: Project,
+    template: TaskTemplate,
+    example: SourceExample,
+    *,
+    status: str = "created",
+    priority: int = 0,
+) -> Task:
+    task = Task(
+        project_id=project.id,
+        example_id=example.id,
+        template_id=template.id,
+        status=status,
+        priority=priority,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+def test_get_next_task_returns_null_when_empty(client: TestClient) -> None:
     response = client.get("/api/tasks/next")
-    assert response.status_code in (200, 500)
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_get_next_task_picks_eligible_status(
+    client: TestClient, db_session: Session
+) -> None:
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    _, examples = _seed_examples(db_session, project.id, count=3)
+
+    _seed_task(db_session, project, template, examples[0], status="resolved")
+    _seed_task(db_session, project, template, examples[1], status="submitted")
+    eligible = _seed_task(db_session, project, template, examples[2], status="created")
+
+    response = client.get(f"/api/tasks/next?project_id={project.id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body is not None
+    assert body["id"] == str(eligible.id)
+
+
+def test_get_next_task_orders_by_priority_then_created_at(
+    client: TestClient, db_session: Session
+) -> None:
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    _, examples = _seed_examples(db_session, project.id, count=3)
+
+    older_low = _seed_task(
+        db_session, project, template, examples[0], status="created", priority=0
+    )
+    _seed_task(db_session, project, template, examples[1], status="created", priority=0)
+    high = _seed_task(
+        db_session, project, template, examples[2], status="created", priority=5
+    )
+
+    response = client.get(f"/api/tasks/next?project_id={project.id}")
+    assert response.status_code == 200
+    assert response.json()["id"] == str(high.id)
+
+    # Drop high-priority row → tie-break on oldest created_at.
+    db_session.delete(high)
+    db_session.commit()
+    response = client.get(f"/api/tasks/next?project_id={project.id}")
+    assert response.json()["id"] == str(older_low.id)
+
+
+def test_get_next_task_filters_by_project(
+    client: TestClient, db_session: Session
+) -> None:
+    project_a = _seed_project(db_session)
+    project_b = _seed_project(db_session)
+    template_a = _seed_template(db_session, project_a.id)
+    template_b = _seed_template(db_session, project_b.id)
+    _, ex_a = _seed_examples(db_session, project_a.id, count=1, hash_prefix="a")
+    _, ex_b = _seed_examples(db_session, project_b.id, count=1, hash_prefix="b")
+    _seed_task(db_session, project_a, template_a, ex_a[0])
+    task_b = _seed_task(db_session, project_b, template_b, ex_b[0])
+
+    response = client.get(f"/api/tasks/next?project_id={project_b.id}")
+    assert response.status_code == 200
+    assert response.json()["id"] == str(task_b.id)
+
+
+def test_get_next_task_excludes_given_task(
+    client: TestClient, db_session: Session
+) -> None:
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    _, examples = _seed_examples(db_session, project.id, count=2)
+    first = _seed_task(db_session, project, template, examples[0], priority=5)
+    second = _seed_task(db_session, project, template, examples[1], priority=1)
+
+    response = client.get(
+        f"/api/tasks/next?project_id={project.id}&exclude_task_id={first.id}"
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(second.id)
+
+
+def test_get_next_task_excludes_tasks_already_annotated_by_annotator(
+    client: TestClient, db_session: Session
+) -> None:
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    _, examples = _seed_examples(db_session, project.id, count=2)
+    done = _seed_task(db_session, project, template, examples[0])
+    pending = _seed_task(db_session, project, template, examples[1])
+
+    annotator = User(email=f"a-{uuid.uuid4()}@x.com", name="A", role="annotator")
+    db_session.add(annotator)
+    db_session.flush()
+    assignment = Assignment(task_id=done.id, annotator_id=annotator.id, status="submitted")
+    db_session.add(assignment)
+    db_session.flush()
+    db_session.add(
+        Annotation(
+            task_id=done.id,
+            assignment_id=assignment.id,
+            annotator_id=annotator.id,
+            label={"relevance": "relevant"},
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        f"/api/tasks/next?project_id={project.id}&annotator_id={annotator.id}"
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(pending.id)
 
 
 def test_generate_tasks_route_exists(client: TestClient) -> None:

@@ -10,7 +10,11 @@ import { FlashMessage } from "@/components/FlashMessage";
 import { ModelSuggestionPanel } from "@/components/ModelSuggestionPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { ModelSuggestionResponse, TaskDetailResponse } from "@/lib/schemas/task";
+import type {
+  ModelSuggestionResponse,
+  TaskDetailResponse,
+  TaskResponse,
+} from "@/lib/schemas/task";
 import type { UserResponse } from "@/lib/schemas/user";
 
 export default function TaskWorkbenchPage({ params }: { params: { taskId: string } }) {
@@ -61,7 +65,14 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
   async function navigateNext() {
     if (!task) return;
     try {
-      const next = await api.get<TaskDetailResponse | null>("/api/tasks/next");
+      const params = new URLSearchParams({
+        project_id: task.project_id,
+        exclude_task_id: task.id,
+      });
+      if (selectedAnnotatorId) params.set("annotator_id", selectedAnnotatorId);
+      const next = await api.get<TaskResponse | null>(
+        `/api/tasks/next?${params.toString()}`,
+      );
       if (next && next.id !== task.id) {
         router.push(`/tasks/${next.id}`);
       } else {

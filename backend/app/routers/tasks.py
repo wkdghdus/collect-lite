@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
+from app.models.annotation import Annotation
 from app.models.dataset import Dataset
 from app.models.project import Project
 from app.models.task import Task, TaskTemplate
@@ -150,9 +151,28 @@ def run_model_suggestions(
     raise NotImplementedError
 
 
+_NEXT_TASK_STATUSES = ("created", "suggested", "assigned")
+
+
 @router.get("/tasks/next", response_model=TaskResponse | None)
-def get_next_task(db: Session = Depends(get_db)):
-    raise NotImplementedError
+def get_next_task(
+    project_id: uuid.UUID | None = None,
+    annotator_id: uuid.UUID | None = None,
+    exclude_task_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Task).filter(Task.status.in_(_NEXT_TASK_STATUSES))
+    if project_id is not None:
+        query = query.filter(Task.project_id == project_id)
+    if exclude_task_id is not None:
+        query = query.filter(Task.id != exclude_task_id)
+    if annotator_id is not None:
+        already_annotated = db.query(Annotation.task_id).filter(
+            Annotation.annotator_id == annotator_id
+        )
+        query = query.filter(~Task.id.in_(already_annotated))
+    task = query.order_by(Task.priority.desc(), Task.created_at.asc()).first()
+    return _task_to_response(task) if task is not None else None
 
 
 @router.get("/tasks/{task_id}", response_model=TaskDetailResponse)
