@@ -30,6 +30,7 @@ class TaskResponse(BaseModel):
     status: str
     priority: int
     required_annotations: int
+    annotation_count: int = 0
     created_at: datetime
     updated_at: datetime
 

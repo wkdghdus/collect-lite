@@ -214,6 +214,61 @@ def test_list_project_tasks_returns_seeded_tasks(client: TestClient, db_session:
     assert timestamps == sorted(timestamps, reverse=True)
 
 
+def test_list_project_tasks_includes_annotation_count(
+    client: TestClient, db_session: Session
+) -> None:
+    from app.models.annotation import Annotation
+    from app.models.task import Assignment
+    from app.models.user import User
+
+    project = _seed_project(db_session)
+    template = _seed_template(db_session, project.id)
+    dataset, examples = _seed_examples(db_session, project.id, count=3)
+
+    client.post(
+        f"/api/projects/{project.id}/tasks/generate",
+        json={
+            "template_id": str(template.id),
+            "dataset_id": str(dataset.id),
+            "required_annotations": 2,
+        },
+    )
+
+    tasks = db_session.query(Task).filter(Task.project_id == project.id).all()
+    assert len(tasks) == 3
+    by_example = {t.example_id: t for t in tasks}
+
+    user = User(email=f"a-{uuid.uuid4()}@x.com", name="A", role="annotator")
+    db_session.add(user)
+    db_session.flush()
+
+    def _annotate(task_id: uuid.UUID, label: str) -> None:
+        assignment = Assignment(task_id=task_id, annotator_id=user.id, status="submitted")
+        db_session.add(assignment)
+        db_session.flush()
+        db_session.add(
+            Annotation(
+                task_id=task_id,
+                assignment_id=assignment.id,
+                annotator_id=user.id,
+                label={"relevance": label},
+            )
+        )
+
+    _annotate(by_example[examples[0].id].id, "relevant")
+    _annotate(by_example[examples[1].id].id, "relevant")
+    _annotate(by_example[examples[1].id].id, "not_relevant")
+    db_session.commit()
+
+    response = client.get(f"/api/projects/{project.id}/tasks")
+    assert response.status_code == 200
+    body = response.json()
+    counts_by_task = {row["id"]: row["annotation_count"] for row in body}
+    assert counts_by_task[str(by_example[examples[0].id].id)] == 1
+    assert counts_by_task[str(by_example[examples[1].id].id)] == 2
+    assert counts_by_task[str(by_example[examples[2].id].id)] == 0
+
+
 def test_list_project_templates_returns_seeded(client: TestClient, db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 

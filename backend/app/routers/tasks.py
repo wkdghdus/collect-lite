@@ -45,6 +45,21 @@ def _as_dict(value: Any) -> dict:
     return {}
 
 
+def _task_to_response(task: Task) -> TaskResponse:
+    return TaskResponse(
+        id=task.id,
+        project_id=task.project_id,
+        example_id=task.example_id,
+        template_id=task.template_id,
+        status=task.status,
+        priority=task.priority,
+        required_annotations=task.required_annotations,
+        annotation_count=len(task.annotations),
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
+
+
 router = APIRouter(tags=["tasks"])
 
 
@@ -57,7 +72,8 @@ def list_project_tasks(
     query = db.query(Task).filter(Task.project_id == project_id)
     if status is not None:
         query = query.filter(Task.status == status)
-    return query.order_by(Task.created_at.desc()).all()
+    tasks = query.order_by(Task.created_at.desc()).all()
+    return [_task_to_response(t) for t in tasks]
 
 
 @router.get(
@@ -174,7 +190,7 @@ def get_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
     )
 
     return TaskDetailResponse(
-        **TaskResponse.model_validate(task).model_dump(),
+        **_task_to_response(task).model_dump(),
         source_example_id=task.example_id,
         dataset_id=task.example.dataset_id if task.example else None,
         query=str(payload.get("query", "")),
