@@ -24,6 +24,14 @@ class AnnotationCreate(BaseModel):
         return self
 
 
+class AnnotationUpdate(BaseModel):
+    annotator_id: uuid.UUID
+    label: RelevanceLabel | None = None
+    confidence: int | None = Field(default=None, ge=1, le=5)
+    notes: str | None = None
+    model_suggestion_visible: bool | None = None
+
+
 class AnnotationResponse(BaseModel):
     id: uuid.UUID
     task_id: uuid.UUID
@@ -35,6 +43,7 @@ class AnnotationResponse(BaseModel):
     model_suggestion_visible: bool
     latency_ms: int | None
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

@@ -68,10 +68,12 @@ class ModelSuggestionPayload(BaseModel):
 
 class AnnotationSummary(BaseModel):
     id: uuid.UUID
+    annotator_id: uuid.UUID
     label: dict
     confidence: int | None = None
     notes: str | None = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

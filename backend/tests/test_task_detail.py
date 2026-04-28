@@ -230,8 +230,16 @@ def test_get_task_returns_annotations(client: TestClient, db_session: Session) -
     assert annotations[1]["confidence"] is None
     assert annotations[1]["notes"] is None
     for entry in annotations:
-        assert set(entry.keys()) == {"id", "label", "confidence", "notes", "created_at"}
-        assert "annotator_id" not in entry
+        assert set(entry.keys()) == {
+            "id",
+            "annotator_id",
+            "label",
+            "confidence",
+            "notes",
+            "created_at",
+            "updated_at",
+        }
+        assert entry["annotator_id"] == str(annotator.id)
         assert "assignment_id" not in entry
 
 

@@ -211,11 +211,27 @@ def test_threshold_annotation_marks_submitted(client: TestClient, db_session: Se
 
 def test_assignment_already_submitted_returns_409(client: TestClient, db_session: Session) -> None:
     seeded = _seed_task(db_session, assignment_status="submitted")
+    # Seed an existing Annotation so the 409 carries the edit pointer.
+    existing = Annotation(
+        task_id=seeded["task"].id,
+        assignment_id=seeded["assignment"].id,
+        annotator_id=seeded["user"].id,
+        label={"relevance": "relevant"},
+        confidence=4,
+        model_suggestion_visible=False,
+    )
+    db_session.add(existing)
+    db_session.commit()
+
     response = client.post(
         f"/api/tasks/{seeded['task'].id}/annotations",
         json=_valid_body(seeded["assignment"].id),
     )
     assert response.status_code == 409
+    body = response.json()
+    assert "PATCH" in body["detail"]
+    assert body["annotation_id"] == str(existing.id)
+    uuid.UUID(body["annotation_id"])  # parses cleanly
 
 
 def test_consensus_scheduled_not_blocking(client: TestClient, db_session: Session) -> None:
@@ -331,8 +347,13 @@ def test_lazy_assignment_reuses_row(client: TestClient, db_session: Session) -> 
     assert first.status_code == 201
 
     second = client.post(f"/api/tasks/{task.id}/annotations", json=body)
-    # Second call should rejoin the now-submitted assignment as a duplicate-submission 409.
+    # Second call should rejoin the now-submitted assignment as a duplicate-submission 409,
+    # and the body carries the existing annotation_id + a PATCH pointer.
     assert second.status_code == 409
+    second_body = second.json()
+    assert "PATCH" in second_body["detail"]
+    first_annotation_id = first.json()["annotation"]["id"]
+    assert second_body["annotation_id"] == first_annotation_id
 
     db_session.expire_all()
     assignments = (
@@ -410,3 +431,191 @@ def test_missing_both_returns_422(client: TestClient, db_session: Session) -> No
         },
     )
     assert response.status_code == 422
+
+
+def _seed_existing_annotation(
+    db: Session,
+    *,
+    task_status: str = "assigned",
+    assignment_status: str = "submitted",
+    label: dict | None = None,
+    confidence: int = 3,
+):
+    """Seed task + assignment + annotation row directly; mirrors a post-submit state."""
+    seeded = _seed_task(
+        db,
+        required_annotations=2,
+        task_status=task_status,
+        assignment_status=assignment_status,
+    )
+    annotation = Annotation(
+        task_id=seeded["task"].id,
+        assignment_id=seeded["assignment"].id,
+        annotator_id=seeded["user"].id,
+        label=label or {"relevance": "relevant"},
+        confidence=confidence,
+        model_suggestion_visible=False,
+    )
+    db.add(annotation)
+    db.commit()
+    db.refresh(annotation)
+    return {**seeded, "annotation": annotation}
+
+
+def test_patch_annotation_updates_label_and_bumps_updated_at(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(db_session)
+    annotation = seeded["annotation"]
+    original_label = dict(annotation.label)
+    created_at = annotation.created_at
+
+    response = client.patch(
+        f"/api/tasks/{seeded['task'].id}/annotations/{annotation.id}",
+        json={
+            "annotator_id": str(seeded["user"].id),
+            "label": {"relevance": "not_relevant"},
+            "confidence": 5,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["label"] == {"relevance": "not_relevant"}
+    assert body["confidence"] == 5
+    assert body["id"] == str(annotation.id)
+
+    db_session.expire_all()
+    refreshed = db_session.get(Annotation, annotation.id)
+    assert refreshed.label == {"relevance": "not_relevant"}
+    assert refreshed.label != original_label
+    assert refreshed.confidence == 5
+    assert refreshed.updated_at >= created_at
+
+
+def test_patch_annotation_partial_update_keeps_other_fields(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(
+        db_session, label={"relevance": "partially_relevant"}, confidence=2
+    )
+    annotation = seeded["annotation"]
+
+    response = client.patch(
+        f"/api/tasks/{seeded['task'].id}/annotations/{annotation.id}",
+        json={
+            "annotator_id": str(seeded["user"].id),
+            "confidence": 4,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["label"] == {"relevance": "partially_relevant"}
+    assert body["confidence"] == 4
+
+
+def test_patch_annotation_rejects_wrong_annotator(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(db_session)
+    intruder = _make_annotator(db_session, email="intruder@example.com")
+
+    response = client.patch(
+        f"/api/tasks/{seeded['task'].id}/annotations/{seeded['annotation'].id}",
+        json={
+            "annotator_id": str(intruder.id),
+            "label": {"relevance": "not_relevant"},
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_patch_annotation_rejects_task_mismatch(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(db_session)
+    other_task = _seed_unassigned_task(db_session)["task"]
+
+    response = client.patch(
+        f"/api/tasks/{other_task.id}/annotations/{seeded['annotation'].id}",
+        json={
+            "annotator_id": str(seeded["user"].id),
+            "label": {"relevance": "not_relevant"},
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_patch_annotation_returns_404_when_missing(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(db_session)
+
+    response = client.patch(
+        f"/api/tasks/{seeded['task'].id}/annotations/{uuid.uuid4()}",
+        json={
+            "annotator_id": str(seeded["user"].id),
+            "label": {"relevance": "not_relevant"},
+        },
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("locked_status", ["needs_review", "resolved", "exported"])
+def test_patch_annotation_returns_409_when_task_locked(
+    client: TestClient, db_session: Session, locked_status: str
+) -> None:
+    seeded = _seed_existing_annotation(db_session, task_status=locked_status)
+
+    response = client.patch(
+        f"/api/tasks/{seeded['task'].id}/annotations/{seeded['annotation'].id}",
+        json={
+            "annotator_id": str(seeded["user"].id),
+            "label": {"relevance": "not_relevant"},
+        },
+    )
+
+    assert response.status_code == 409
+    assert "locked" in response.json()["detail"].lower()
+
+
+def test_patch_annotation_reschedules_consensus_when_status_submitted(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(db_session, task_status="submitted")
+    mock = MagicMock()
+
+    with patch("app.routers.annotations.jobs.compute_consensus", mock):
+        response = client.patch(
+            f"/api/tasks/{seeded['task'].id}/annotations/{seeded['annotation'].id}",
+            json={
+                "annotator_id": str(seeded["user"].id),
+                "label": {"relevance": "not_relevant"},
+            },
+        )
+
+    assert response.status_code == 200
+    mock.assert_called_once_with(seeded["task"].id)
+
+
+def test_patch_annotation_does_not_reschedule_when_status_assigned(
+    client: TestClient, db_session: Session
+) -> None:
+    seeded = _seed_existing_annotation(db_session, task_status="assigned")
+    mock = MagicMock()
+
+    with patch("app.routers.annotations.jobs.compute_consensus", mock):
+        response = client.patch(
+            f"/api/tasks/{seeded['task'].id}/annotations/{seeded['annotation'].id}",
+            json={
+                "annotator_id": str(seeded["user"].id),
+                "label": {"relevance": "not_relevant"},
+            },
+        )
+
+    assert response.status_code == 200
+    mock.assert_not_called()
