@@ -11,7 +11,7 @@
 | `/projects/[projectId]/datasets` | `.../datasets/page.tsx` | Dataset upload + list |
 | `/projects/[projectId]/tasks` | `.../tasks/page.tsx` | Task queue, generate, suggestions |
 | `/projects/[projectId]/review` | `.../review/page.tsx` | Reviewer queue — fetches `GET /api/projects/{id}/review/tasks`; submits decisions via `POST /api/tasks/{taskId}/review` and invalidates the queue query so resolved tasks drop off |
-| `/projects/[projectId]/metrics` | `.../metrics/page.tsx` | Project metrics tiles |
+| `/projects/[projectId]/metrics` | `.../metrics/page.tsx` | Project metrics dashboard — fetches `GET /api/projects/{id}/metrics`. Renders four sections: hero (`total_tasks` + `exportable_task_count`), workflow funnel (`MetricsCard` per status in `created → suggested → assigned → submitted → needs_review → resolved → exported` order), quality (`avg_human_agreement` + `model_human_agreement_rate` as percents, em-dash when `null`), and a `final_label_distribution` card listing each label with count + percent of total |
 | `/projects/[projectId]/exports` | `.../exports/page.tsx` | Per-project exports page — fetches `GET /api/projects/{id}/exports` for the persisted list (newest-first, polls every 2s while any row is non-terminal), POSTs `/api/projects/{id}/exports` from one of two buttons (Generate JSONL / Generate CSV) and invalidates the list query on success, downloads via `GET /api/exports/{id}/download` |
 | `/tasks/[taskId]` | `app/tasks/[taskId]/page.tsx` | Annotation workbench — also fetches `GET /api/tasks/{task_id}/suggestions` and posts `POST /api/tasks/{task_id}/suggestion` to render/generate model suggestions via `ModelSuggestionPanel` |
 | `/annotate` | `app/annotate/page.tsx` | Legacy global annotator workbench (kept untouched; superseded by `/tasks/[taskId]`) |
@@ -24,7 +24,7 @@ Shared: `app/layout.tsx` (root layout + Providers), `app/providers.tsx` (QueryCl
 
 `AppShell` · `ProjectCard` · `DatasetUploader` · `TaskQueueTable` · `AnnotationCard`
 `AnnotationWorkbench` · `ModelSuggestionPanel` · `ReviewQueueItemCard`
-`MetricsCard` · `MetricsDashboard` · `ConsensusBadge` · `TaskTemplateEditor`
+`MetricsCard` · `ConsensusBadge` · `TaskTemplateEditor`
 
 ## Lib (`lib/`)
 
