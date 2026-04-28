@@ -88,10 +88,11 @@ export default function TasksPage({ params }: { params: { projectId: string } })
           </Button>
           <Button
             variant="outline"
-            disabled={suggest.isPending}
+            disabled
+            title="Coming soon — generate suggestions per task from the task detail page."
             onClick={() => suggest.mutate()}
           >
-            {suggest.isPending ? "Queuing…" : "Run Model Suggestions"}
+            Run Model Suggestions
           </Button>
         </div>
         {actionMessage ? (
