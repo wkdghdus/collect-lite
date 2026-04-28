@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.services.task_templates import ensure_default_template
 
 router = APIRouter(tags=["projects"])
 
@@ -19,6 +20,8 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
         status="draft",
     )
     db.add(project)
+    db.flush()
+    ensure_default_template(db, project)
     db.commit()
     db.refresh(project)
     return project

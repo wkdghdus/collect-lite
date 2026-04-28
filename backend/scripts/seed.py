@@ -247,32 +247,16 @@ def _ensure_dataset_and_examples(
 
 
 def _ensure_template(db: Session, project: Project, report: SeedReport) -> TaskTemplate:
-    existing = (
+    from app.services.task_templates import ensure_default_template
+
+    existing_count = (
         db.query(TaskTemplate)
         .filter(TaskTemplate.project_id == project.id, TaskTemplate.name == TEMPLATE_NAME)
-        .first()
+        .count()
     )
-    if existing is not None:
-        return existing
-    template = TaskTemplate(
-        project_id=project.id,
-        name=TEMPLATE_NAME,
-        instructions=(
-            "Read the query and the candidate document. Mark the document "
-            "'relevant' if it directly answers the query, 'partially_relevant' "
-            "if it touches the same topic but does not answer the question, or "
-            "'not_relevant' if it is off-topic."
-        ),
-        label_schema={
-            "type": "single_choice",
-            "field": "relevance",
-            "options": LABEL_OPTIONS,
-        },
-        version=1,
-    )
-    db.add(template)
-    db.flush()
-    report.templates += 1
+    template = ensure_default_template(db, project)
+    if existing_count == 0:
+        report.templates += 1
     return template
 
 
