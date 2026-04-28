@@ -10,7 +10,7 @@
 | `/projects/[projectId]` | `app/projects/[projectId]/page.tsx` | Project detail + section nav |
 | `/projects/[projectId]/datasets` | `.../datasets/page.tsx` | Dataset upload + list |
 | `/projects/[projectId]/tasks` | `.../tasks/page.tsx` | Task queue, generate, suggestions |
-| `/projects/[projectId]/review` | `.../review/page.tsx` | Reviewer disagreement queue |
+| `/projects/[projectId]/review` | `.../review/page.tsx` | Reviewer queue — fetches `GET /api/projects/{id}/review/tasks`; submits decisions via `POST /api/tasks/{taskId}/review` and invalidates the queue query so resolved tasks drop off |
 | `/projects/[projectId]/metrics` | `.../metrics/page.tsx` | Project metrics tiles |
 | `/projects/[projectId]/exports` | `.../exports/page.tsx` | Per-project export creation + status polling |
 | `/tasks/[taskId]` | `app/tasks/[taskId]/page.tsx` | Annotation workbench — also fetches `GET /api/tasks/{task_id}/suggestions` and posts `POST /api/tasks/{task_id}/suggestion` to render/generate model suggestions via `ModelSuggestionPanel` |
@@ -23,7 +23,7 @@ Shared: `app/layout.tsx` (root layout + Providers), `app/providers.tsx` (QueryCl
 ## Feature Components (`components/`)
 
 `AppShell` · `ProjectCard` · `DatasetUploader` · `TaskQueueTable` · `AnnotationCard`
-`AnnotationWorkbench` · `ModelSuggestionPanel` · `ReviewCard` · `ReviewQueueTable`
+`AnnotationWorkbench` · `ModelSuggestionPanel` · `ReviewQueueItemCard`
 `MetricsCard` · `MetricsDashboard` · `ExportBuilder` · `ConsensusBadge` · `TaskTemplateEditor`
 
 ## Lib (`lib/`)
@@ -31,4 +31,4 @@ Shared: `app/layout.tsx` (root layout + Providers), `app/providers.tsx` (QueryCl
 - `api.ts` — typed `get`/`post`/`patch` wrappers (uses `NEXT_PUBLIC_API_URL`)
 - `queryClient.ts` — TanStack QueryClient singleton (30s staleTime)
 - `utils.ts` — `cn()` helper (clsx + tailwind-merge)
-- `schemas/` — Zod schemas mirroring backend Pydantic models: `project`, `dataset`, `task`, `annotation`, `export`
+- `schemas/` — Zod schemas mirroring backend Pydantic models: `project`, `dataset`, `task`, `annotation`, `export`, `review`
