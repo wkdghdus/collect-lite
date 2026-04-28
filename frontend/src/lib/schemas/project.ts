@@ -3,7 +3,14 @@ import { z } from "zod";
 export const ProjectCreateSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  task_type: z.enum(["pairwise_preference", "relevance_rating", "classification", "extraction_qa", "freeform_critique"]),
+  task_type: z.enum([
+    "rag_relevance",
+    "pairwise_preference",
+    "relevance_rating",
+    "classification",
+    "extraction_qa",
+    "freeform_critique",
+  ]),
 });
 
 export const ProjectResponseSchema = z.object({

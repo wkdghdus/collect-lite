@@ -13,12 +13,13 @@ import {
   type ProjectResponse,
 } from "@/lib/schemas/project";
 
-const TASK_TYPES: ProjectCreate["task_type"][] = [
-  "pairwise_preference",
-  "relevance_rating",
-  "classification",
-  "extraction_qa",
-  "freeform_critique",
+const TASK_TYPES: { value: ProjectCreate["task_type"]; comingSoon: boolean }[] = [
+  { value: "rag_relevance", comingSoon: false },
+  { value: "pairwise_preference", comingSoon: true },
+  { value: "relevance_rating", comingSoon: true },
+  { value: "classification", comingSoon: true },
+  { value: "extraction_qa", comingSoon: true },
+  { value: "freeform_critique", comingSoon: true },
 ];
 
 const inputClass =
@@ -34,7 +35,7 @@ export default function NewProjectPage() {
     formState: { errors },
   } = useForm<ProjectCreate>({
     resolver: zodResolver(ProjectCreateSchema),
-    defaultValues: { name: "", description: "", task_type: "relevance_rating" },
+    defaultValues: { name: "", description: "", task_type: "rag_relevance" },
   });
 
   const mutation = useMutation({
@@ -84,8 +85,8 @@ export default function NewProjectPage() {
           </label>
           <select id="task_type" className={inputClass} {...register("task_type")}>
             {TASK_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
+              <option key={t.value} value={t.value} disabled={t.comingSoon}>
+                {t.comingSoon ? `${t.value} (coming soon)` : t.value}
               </option>
             ))}
           </select>
