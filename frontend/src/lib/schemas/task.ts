@@ -26,3 +26,15 @@ export const ModelSuggestionResponseSchema = z.object({
 });
 
 export type ModelSuggestionResponse = z.infer<typeof ModelSuggestionResponseSchema>;
+
+export const TaskTemplateResponseSchema = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  name: z.string(),
+  instructions: z.string(),
+  label_schema: z.record(z.unknown()),
+  version: z.number(),
+  created_at: z.string(),
+});
+
+export type TaskTemplateResponse = z.infer<typeof TaskTemplateResponseSchema>;
