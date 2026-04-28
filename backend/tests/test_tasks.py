@@ -3,9 +3,11 @@ import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.models.annotation import Annotation
 from app.models.dataset import Dataset, SourceExample
 from app.models.project import Project
-from app.models.task import Task, TaskTemplate
+from app.models.task import Assignment, Task, TaskTemplate
+from app.models.user import User
 
 
 def _seed_project(db: Session, task_type: str = "rag_relevance") -> Project:
@@ -217,10 +219,6 @@ def test_list_project_tasks_returns_seeded_tasks(client: TestClient, db_session:
 def test_list_project_tasks_includes_annotation_count(
     client: TestClient, db_session: Session
 ) -> None:
-    from app.models.annotation import Annotation
-    from app.models.task import Assignment
-    from app.models.user import User
-
     project = _seed_project(db_session)
     template = _seed_template(db_session, project.id)
     dataset, examples = _seed_examples(db_session, project.id, count=3)
