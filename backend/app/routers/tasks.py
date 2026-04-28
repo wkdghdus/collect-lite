@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
+from app.models.dataset import Dataset
 from app.models.project import Project
 from app.models.task import Task, TaskTemplate
 from app.schemas.task import (
@@ -15,6 +16,7 @@ from app.schemas.task import (
     TaskDetailResponse,
     TaskGenerateRequest,
     TaskResponse,
+    TaskTemplateResponse,
 )
 from app.services.model_suggestions import (
     PayloadInvalidError,
@@ -58,6 +60,34 @@ def list_project_tasks(
     return query.order_by(Task.created_at.desc()).all()
 
 
+@router.get(
+    "/projects/{project_id}/templates",
+    response_model=list[TaskTemplateResponse],
+)
+def list_project_templates(project_id: uuid.UUID, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    templates = (
+        db.query(TaskTemplate)
+        .filter(TaskTemplate.project_id == project_id)
+        .order_by(TaskTemplate.created_at.desc())
+        .all()
+    )
+    return [
+        TaskTemplateResponse(
+            id=t.id,
+            project_id=t.project_id,
+            name=t.name,
+            instructions=t.instructions,
+            label_schema=_as_dict(t.label_schema),
+            version=t.version,
+            created_at=t.created_at,
+        )
+        for t in templates
+    ]
+
+
 @router.post("/projects/{project_id}/tasks/generate", status_code=202)
 def generate_tasks(
     project_id: uuid.UUID,
@@ -83,8 +113,16 @@ def generate_tasks(
     if template.project_id != project_id:
         raise HTTPException(status_code=400, detail="Template does not belong to this project")
 
+    dataset = db.query(Dataset).filter(Dataset.id == body.dataset_id).first()
+    if not dataset or dataset.project_id != project_id:
+        raise HTTPException(status_code=400, detail="Dataset does not belong to this project")
+
     background_tasks.add_task(
-        jobs.generate_tasks, project_id, body.template_id, body.required_annotations
+        jobs.generate_tasks,
+        project_id,
+        body.template_id,
+        body.required_annotations,
+        body.dataset_id,
     )
     return {"status": "queued", "project_id": project_id}
 

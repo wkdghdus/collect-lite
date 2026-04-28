@@ -12,19 +12,19 @@ def generate_tasks_for_project(
     project_id: uuid.UUID,
     template_id: uuid.UUID,
     required_annotations: int = 2,
+    dataset_id: uuid.UUID | None = None,
 ) -> int:
     existing_example_ids = select(Task.example_id).where(
         Task.project_id == project_id,
         Task.template_id == template_id,
     )
-    examples_to_seed = (
-        db.query(SourceExample.id)
-        .filter(
-            SourceExample.project_id == project_id,
-            SourceExample.id.notin_(existing_example_ids),
-        )
-        .all()
+    query = db.query(SourceExample.id).filter(
+        SourceExample.project_id == project_id,
+        SourceExample.id.notin_(existing_example_ids),
     )
+    if dataset_id is not None:
+        query = query.filter(SourceExample.dataset_id == dataset_id)
+    examples_to_seed = query.all()
     if not examples_to_seed:
         return 0
 

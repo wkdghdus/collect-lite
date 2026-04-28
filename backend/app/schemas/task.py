@@ -10,6 +10,18 @@ class TaskTemplateCreate(BaseModel):
     label_schema: dict
 
 
+class TaskTemplateResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    name: str
+    instructions: str
+    label_schema: dict
+    version: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class TaskResponse(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
@@ -26,6 +38,7 @@ class TaskResponse(BaseModel):
 
 class TaskGenerateRequest(BaseModel):
     template_id: uuid.UUID
+    dataset_id: uuid.UUID
     required_annotations: int = 2
 
 
