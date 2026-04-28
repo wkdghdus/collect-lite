@@ -1,54 +1,79 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+
 import { AppShell } from "@/components/AppShell";
-import { ReviewCard, type ReviewCardItem, type ReviewDecision } from "@/components/ReviewCard";
+import { ReviewQueueItemCard } from "@/components/ReviewQueueItemCard";
+import { api } from "@/lib/api";
+import type {
+  ReviewDecisionCreate,
+  ReviewQueueItem,
+  ReviewSubmitResponse,
+} from "@/lib/schemas/review";
 
 export default function ReviewPage({ params }: { params: { projectId: string } }) {
   const { projectId } = params;
   const queryClient = useQueryClient();
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { data, isLoading, isError, error } = useQuery<ReviewCardItem[]>({
+  const queueQuery = useQuery<ReviewQueueItem[]>({
     queryKey: ["review-queue", projectId],
-    queryFn: () => api.get<ReviewCardItem[]>(`/api/projects/${projectId}/review-queue`),
-    retry: false,
+    queryFn: () => api.get<ReviewQueueItem[]>(`/api/projects/${projectId}/review/tasks`),
   });
 
-  const resolve = useMutation({
-    mutationFn: ({ taskId, decision }: { taskId: string; decision: ReviewDecision }) =>
-      api.post(`/api/reviews/${taskId}/resolve`, decision),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["review-queue", projectId] }),
+  const submit = useMutation<
+    ReviewSubmitResponse,
+    Error,
+    { taskId: string; body: ReviewDecisionCreate }
+  >({
+    mutationFn: ({ taskId, body }) =>
+      api.post<ReviewSubmitResponse>(`/api/tasks/${taskId}/review`, body),
+    onSuccess: (_data, vars) => {
+      setErrors((prev) => {
+        if (!(vars.taskId in prev)) return prev;
+        const next = { ...prev };
+        delete next[vars.taskId];
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["review-queue", projectId] });
+    },
+    onError: (err, vars) => {
+      setErrors((prev) => ({ ...prev, [vars.taskId]: err.message }));
+    },
   });
 
   return (
     <AppShell projectId={projectId} section="Review">
-      <h1 className="text-2xl font-semibold mb-6">Review Queue</h1>
-      {isLoading ? (
+      <h1 className="mb-6 text-2xl font-semibold">Review Queue</h1>
+      {queueQuery.isLoading ? (
         <p className="text-muted-foreground">Loading review queue…</p>
-      ) : isError ? (
-        <div className="rounded-xl border p-12 text-center text-muted-foreground">
-          Review queue is empty.
-          <p className="text-xs mt-2">
-            ({error instanceof Error ? error.message : "endpoint not yet available"})
-          </p>
-        </div>
-      ) : !data || data.length === 0 ? (
+      ) : queueQuery.isError ? (
+        <p className="text-destructive">
+          Failed to load review queue:{" "}
+          {queueQuery.error instanceof Error ? queueQuery.error.message : "Unknown error"}
+        </p>
+      ) : !queueQuery.data || queueQuery.data.length === 0 ? (
         <div className="rounded-xl border p-12 text-center text-muted-foreground">
           Review queue is empty.
         </div>
       ) : (
         <div className="space-y-4">
-          {data.map((item) => (
-            <ReviewCard
-              key={item.task_id}
-              item={item}
-              onResolve={async (decision) => {
-                await resolve.mutateAsync({ taskId: item.task_id, decision });
-              }}
-            />
-          ))}
+          {queueQuery.data.map((item) => {
+            const isSubmittingThis =
+              submit.isPending && submit.variables?.taskId === item.id;
+            return (
+              <ReviewQueueItemCard
+                key={item.id}
+                item={item}
+                submitting={isSubmittingThis}
+                errorMessage={errors[item.id]}
+                onSubmit={async (body) => {
+                  await submit.mutateAsync({ taskId: item.id, body });
+                }}
+              />
+            );
+          })}
         </div>
       )}
     </AppShell>
