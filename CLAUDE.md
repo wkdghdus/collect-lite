@@ -27,6 +27,7 @@ docker-compose up --build
 - `backend/` — FastAPI API + background workers
 - `data/` — sample JSONL datasets for demo/seeding
 - `docs/` — architecture diagram, API reference, demo script
+- `CLAUDE-PLANNING.md` — common misalignments in plannings. Things to consider when coming up with plan.
 
 ## Env Vars
 
