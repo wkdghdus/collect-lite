@@ -13,8 +13,8 @@ A walkthrough of the CollectLite RAG relevance-labeling workflow.
 2. **Upload dataset** — Upload `data/sample_relevance_tasks.jsonl`. Confirm row preview and ingestion.
 3. **Generate tasks** — Navigate to Tasks tab, pick the dataset you uploaded and the default template from the dropdowns, then click "Generate Tasks". Confirm task count matches the dataset's row count.
 4. **Run model suggestions** — Click "Run Model Suggestions". Cohere Rerank scores each candidate pair.
-5. **Annotate as User A** — Switch to Annotator view. Complete 3 tasks, selecting relevance label and confidence.
-6. **Annotate as User B** — Log in as second annotator. Complete the same tasks with different labels to create disagreement.
+5. **Annotate as Alice** — Open a task. Use the "Acting as:" dropdown above the annotation card to select Alice. Pick a relevance radio (relevant / partially_relevant / not_relevant), set a confidence, and submit. The Tasks queue's annotation count moves from `0/2` to `1/2`.
+6. **Annotate as Bob** — Re-open the same task. Switch the "Acting as:" dropdown to Bob, choose a different label to create disagreement, and submit. The task transitions submitted → needs_review (consensus job runs in the background) and the queue badge shows `2/2`.
 7. **Review disagreements** — Open Review Queue. Inspect the side-by-side annotations and model suggestion. Submit final reviewer decision.
 8. **View metrics** — Open Metrics dashboard. Observe agreement rate, model-human disagreement, and throughput.
 9. **Export dataset** — Click "Export", choose JSONL format. Download the file and inspect provenance fields.
