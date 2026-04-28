@@ -280,3 +280,31 @@ def test_compute_consensus_uses_label_fallback_key(db_session) -> None:
 
     db_session.expire_all()
     assert db_session.get(Task, task.id).status == "resolved"
+
+
+# T10
+def test_compute_consensus_malformed_model_suggestion_forces_review(db_session) -> None:
+    task = _seed_task(db_session, label_values=["relevant", "relevant"])
+    _add_suggestion(db_session, task.id, suggestion={"unexpected_key": "x"})
+
+    compute_consensus(db_session, task.id)
+
+    db_session.expire_all()
+    assert db_session.get(Task, task.id).status == "needs_review"
+    result = _consensus_for(db_session, task.id)
+    assert result is not None
+    assert result.status == "needs_review"
+
+
+# T10b
+def test_compute_consensus_empty_model_suggestion_forces_review(db_session) -> None:
+    task = _seed_task(db_session, label_values=["relevant", "relevant"])
+    _add_suggestion(db_session, task.id, suggestion={})
+
+    compute_consensus(db_session, task.id)
+
+    db_session.expire_all()
+    assert db_session.get(Task, task.id).status == "needs_review"
+    result = _consensus_for(db_session, task.id)
+    assert result is not None
+    assert result.status == "needs_review"

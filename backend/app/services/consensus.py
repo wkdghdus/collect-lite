@@ -78,7 +78,10 @@ def compute_consensus(db: Session, task_id: uuid.UUID) -> None:
 
     requires_review = human_agreement < 1.0 or model_agreement is False
 
-    # TODO: add UNIQUE(task_id) on consensus_results and switch to ON CONFLICT upsert.
+    # Follow-up (not required now): add UNIQUE(task_id) on consensus_results and
+    # replace the read-then-update/insert below with an ON CONFLICT (task_id) DO UPDATE
+    # upsert. The current path is safe because FastAPI BackgroundTasks runs serially
+    # per request, but a concurrent caller could race and produce duplicate rows.
     existing = (
         db.query(ConsensusResult)
         .filter(ConsensusResult.task_id == task_id)
