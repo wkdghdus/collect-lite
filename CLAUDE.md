@@ -1,7 +1,7 @@
 # CollectLite — Agent Guide
 
 Human-data collection and model-evaluation platform.
-Stack: Next.js 14 · FastAPI · PostgreSQL 16 · Redis · Cohere
+Stack: Next.js 14 · FastAPI · PostgreSQL 16 · Cohere
 
 ## Commands
 
@@ -24,15 +24,16 @@ docker-compose up --build
 ## Directory Structure
 
 - `frontend/` — Next.js App Router (annotator UI, admin, review, exports)
-- `backend/` — FastAPI API + background workers
+- `backend/` — FastAPI API + in-process background tasks
 - `data/` — sample JSONL datasets for demo/seeding
 - `docs/` — architecture diagram, API reference, demo script
+- `docs/architecture/` — long-form architecture: `system-design.md` (component topology) and `process-flows.md` (per-flow writes/reads)
 - `CLAUDE-PLANNING.md` — common misalignments in plannings. Things to consider when coming up with plan.
 
 ## Env Vars
 
 See `.env.example`. Never commit `.env`.
-Key: `DATABASE_URL`, `REDIS_URL`, `COHERE_API_KEY`, `SECRET_KEY`
+Key: `DATABASE_URL`, `COHERE_API_KEY`, `SECRET_KEY`
 
 ## Implementation rules and guidelines
 
