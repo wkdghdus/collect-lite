@@ -11,7 +11,7 @@ A walkthrough of the CollectLite RAG relevance-labeling workflow.
 
 1. **Create project** — Click "New Project", name it "RAG Relevance Evaluation", select task type "Document Relevance Rating".
 2. **Upload dataset** — Upload `data/sample_relevance_tasks.jsonl`. Confirm row preview and ingestion.
-3. **Generate tasks** — Navigate to Tasks tab, click "Generate Tasks". Confirm task count matches row count.
+3. **Generate tasks** — Navigate to Tasks tab, pick the dataset you uploaded and the default template from the dropdowns, then click "Generate Tasks". Confirm task count matches the dataset's row count.
 4. **Run model suggestions** — Click "Run Model Suggestions". Cohere Rerank scores each candidate pair.
 5. **Annotate as User A** — Switch to Annotator view. Complete 3 tasks, selecting relevance label and confidence.
 6. **Annotate as User B** — Log in as second annotator. Complete the same tasks with different labels to create disagreement.
