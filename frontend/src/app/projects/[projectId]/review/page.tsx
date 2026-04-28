@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "@/components/AppShell";
+import { FlashMessage } from "@/components/FlashMessage";
 import { ReviewQueueItemCard } from "@/components/ReviewQueueItemCard";
 import { api } from "@/lib/api";
 import type {
@@ -16,6 +17,7 @@ export default function ReviewPage({ params }: { params: { projectId: string } }
   const { projectId } = params;
   const queryClient = useQueryClient();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [flash, setFlash] = useState<string | null>(null);
 
   const queueQuery = useQuery<ReviewQueueItem[]>({
     queryKey: ["review-queue", projectId],
@@ -36,6 +38,7 @@ export default function ReviewPage({ params }: { params: { projectId: string } }
         delete next[vars.taskId];
         return next;
       });
+      setFlash("Review submitted.");
       queryClient.invalidateQueries({ queryKey: ["review-queue", projectId] });
     },
     onError: (err, vars) => {
@@ -46,6 +49,7 @@ export default function ReviewPage({ params }: { params: { projectId: string } }
   return (
     <AppShell projectId={projectId} section="Review">
       <h1 className="mb-6 text-2xl font-semibold">Review Queue</h1>
+      <FlashMessage message={flash} onDismiss={() => setFlash(null)} />
       {queueQuery.isLoading ? (
         <p className="text-muted-foreground">Loading review queue…</p>
       ) : queueQuery.isError ? (

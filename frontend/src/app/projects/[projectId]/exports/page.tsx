@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "@/components/AppShell";
+import { FlashMessage } from "@/components/FlashMessage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { formatStatus } from "@/lib/formatStatus";
 import type { ExportCreate, ExportResponse } from "@/lib/schemas/export";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -21,14 +24,10 @@ function isTerminal(status: ExportResponse["status"]): boolean {
   return status === "completed" || status === "failed";
 }
 
-function statusFallbackLabel(status: ExportResponse["status"]): string {
-  if (status === "failed") return "Failed";
-  return "Pending";
-}
-
 export default function ExportsPage({ params }: { params: { projectId: string } }) {
   const { projectId } = params;
   const queryClient = useQueryClient();
+  const [flash, setFlash] = useState<string | null>(null);
 
   const exportsQuery = useQuery<ExportResponse[]>({
     queryKey: ["exports", projectId],
@@ -44,6 +43,7 @@ export default function ExportsPage({ params }: { params: { projectId: string } 
     mutationFn: (body) =>
       api.post<ExportResponse>(`/api/projects/${projectId}/exports`, body),
     onSuccess: () => {
+      setFlash("Export queued.");
       queryClient.invalidateQueries({ queryKey: ["exports", projectId] });
     },
   });
@@ -75,6 +75,8 @@ export default function ExportsPage({ params }: { params: { projectId: string } 
           Failed to create export: {createExport.error.message}
         </p>
       ) : null}
+
+      <FlashMessage message={flash} onDismiss={() => setFlash(null)} />
 
       <h2 className="mb-3 text-lg font-semibold">Recent exports</h2>
 
@@ -109,7 +111,7 @@ export default function ExportsPage({ params }: { params: { projectId: string } 
                 <td className="p-3">{exp.row_count}</td>
                 <td className="p-3">
                   <Badge variant={exp.status === "completed" ? "default" : "outline"}>
-                    {exp.status}
+                    {formatStatus(exp.status)}
                   </Badge>
                 </td>
                 <td className="p-3 text-muted-foreground">
@@ -127,7 +129,7 @@ export default function ExportsPage({ params }: { params: { projectId: string } 
                     </a>
                   ) : (
                     <span className="text-xs text-muted-foreground">
-                      {statusFallbackLabel(exp.status)}
+                      {formatStatus(exp.status)}
                     </span>
                   )}
                 </td>

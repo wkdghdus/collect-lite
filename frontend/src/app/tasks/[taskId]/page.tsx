@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import { AnnotationCard } from "@/components/AnnotationCard";
+import { FlashMessage } from "@/components/FlashMessage";
 import { ModelSuggestionPanel } from "@/components/ModelSuggestionPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
   const { taskId } = params;
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [flash, setFlash] = useState<string | null>(null);
 
   const taskQuery = useQuery<TaskResponse>({
     queryKey: ["task", taskId],
@@ -30,6 +33,7 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
   const generate = useMutation<ModelSuggestionResponse, Error, void>({
     mutationFn: () => api.post<ModelSuggestionResponse>(`/api/tasks/${taskId}/suggestion`, {}),
     onSuccess: () => {
+      setFlash("Model suggestion generated.");
       queryClient.invalidateQueries({ queryKey: ["task", taskId, "suggestions"] });
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
     },
@@ -63,6 +67,9 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
         confidence,
         model_suggestion_visible: latest != null,
       });
+      setFlash("Annotation submitted.");
+      // Hold the flash on-screen briefly before routing to the next task.
+      await new Promise((r) => setTimeout(r, 600));
     } catch (e) {
       console.error("Submit failed", e);
     }
@@ -102,6 +109,7 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
             </p>
           ) : null}
         </div>
+        <FlashMessage message={flash} onDismiss={() => setFlash(null)} />
       </section>
 
       {taskQuery.isLoading ? (
