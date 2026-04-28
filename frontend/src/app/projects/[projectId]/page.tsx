@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { MetricsCard } from "@/components/MetricsCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import { formatStatus } from "@/lib/formatStatus";
 import type { ProjectResponse } from "@/lib/schemas/project";
 import type { ProjectMetricsResponse } from "@/lib/schemas/metrics";
 
@@ -49,7 +50,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
         <>
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-2xl font-semibold">{project.name}</h1>
-            <Badge>{project.status}</Badge>
+            <Badge>{formatStatus(project.status)}</Badge>
           </div>
           <p className="text-sm text-muted-foreground mb-8">{project.task_type}</p>
 

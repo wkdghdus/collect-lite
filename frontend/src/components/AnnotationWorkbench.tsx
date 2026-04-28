@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatStatus } from "@/lib/formatStatus";
 import { type TaskResponse } from "@/lib/schemas/task";
 
 interface AnnotationWorkbenchProps {
@@ -32,7 +33,7 @@ export function AnnotationWorkbench({ task, onSubmit, onSkip }: AnnotationWorkbe
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground">ID: {task.id}</p>
-          <p className="text-xs text-muted-foreground">Status: {task.status}</p>
+          <p className="text-xs text-muted-foreground">Status: {formatStatus(task.status)}</p>
         </CardContent>
       </Card>
       <div className="flex items-center gap-2">

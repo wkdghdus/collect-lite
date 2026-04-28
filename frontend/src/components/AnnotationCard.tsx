@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatStatus } from "@/lib/formatStatus";
 import type { TaskResponse } from "@/lib/schemas/task";
 
 interface AnnotationCardProps {
@@ -42,7 +43,7 @@ export function AnnotationCard({ task, onSubmit, onSkip }: AnnotationCardProps) 
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium font-mono">{task.id.slice(0, 8)}…</CardTitle>
-          <Badge variant="outline">{task.status}</Badge>
+          <Badge variant="outline">{formatStatus(task.status)}</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

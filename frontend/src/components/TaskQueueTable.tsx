@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { formatStatus } from "@/lib/formatStatus";
 import type { TaskResponse } from "@/lib/schemas/task";
 
 interface TaskQueueTableProps {
@@ -55,7 +56,7 @@ export function TaskQueueTable({ tasks, onSelect }: TaskQueueTableProps) {
           >
             <td className="p-3 font-mono text-xs">{truncateId(task.id)}</td>
             <td className="p-3">
-              <Badge variant={statusVariant[task.status] ?? "outline"}>{task.status}</Badge>
+              <Badge variant={statusVariant[task.status] ?? "outline"}>{formatStatus(task.status)}</Badge>
             </td>
             <td className="p-3">{task.priority}</td>
             <td className="p-3">{task.required_annotations}</td>

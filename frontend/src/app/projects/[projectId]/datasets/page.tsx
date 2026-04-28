@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import { DatasetUploader } from "@/components/DatasetUploader";
+import { formatStatus } from "@/lib/formatStatus";
 import type { DatasetResponse } from "@/lib/schemas/dataset";
 
 export default function DatasetsPage({ params }: { params: { projectId: string } }) {
@@ -54,7 +55,7 @@ export default function DatasetsPage({ params }: { params: { projectId: string }
               <tr key={d.id} className="border-t">
                 <td className="p-3">{d.filename}</td>
                 <td className="p-3">{d.row_count}</td>
-                <td className="p-3">{d.status}</td>
+                <td className="p-3">{formatStatus(d.status)}</td>
                 <td className="p-3 text-muted-foreground">
                   {new Date(d.created_at).toISOString().slice(0, 10)}
                 </td>
