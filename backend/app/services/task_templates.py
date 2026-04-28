@@ -1,6 +1,6 @@
 """Default-template provisioning for projects.
 
-Centralises the template-content for each supported `task_type` so the
+Centralises the template content for each supported ``task_type`` so the
 projects router and the seed script stay in sync.
 """
 
@@ -11,28 +11,20 @@ from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.task import TaskTemplate
 
-RAG_RELEVANCE = "rag_relevance"
-
-RAG_RELEVANCE_LABEL_OPTIONS = ["relevant", "partially_relevant", "not_relevant"]
-
-DEFAULT_TEMPLATE_NAME = {
-    RAG_RELEVANCE: "RAG Relevance v1",
-}
-
-DEFAULT_TEMPLATE_INSTRUCTIONS = {
-    RAG_RELEVANCE: (
-        "Read the query and the candidate document. Mark the document "
-        "'relevant' if it directly answers the query, 'partially_relevant' "
-        "if it touches the same topic but does not answer the question, or "
-        "'not_relevant' if it is off-topic."
-    ),
-}
-
-DEFAULT_TEMPLATE_LABEL_SCHEMA = {
-    RAG_RELEVANCE: {
-        "type": "single_choice",
-        "field": "relevance",
-        "options": RAG_RELEVANCE_LABEL_OPTIONS,
+DEFAULT_TEMPLATES: dict[str, dict] = {
+    "rag_relevance": {
+        "name": "RAG Relevance v1",
+        "instructions": (
+            "Read the query and the candidate document. Mark the document "
+            "'relevant' if it directly answers the query, 'partially_relevant' "
+            "if it touches the same topic but does not answer the question, or "
+            "'not_relevant' if it is off-topic."
+        ),
+        "label_schema": {
+            "type": "single_choice",
+            "field": "relevance",
+            "options": ["relevant", "partially_relevant", "not_relevant"],
+        },
     },
 }
 
@@ -40,17 +32,20 @@ DEFAULT_TEMPLATE_LABEL_SCHEMA = {
 def ensure_default_template(db: Session, project: Project) -> TaskTemplate | None:
     """Return the existing default template for the project, or create it.
 
-    Looks up by `(project_id, name)` so a second invocation is a no-op.
+    Looks up by ``(project_id, name)`` so a second invocation is a no-op.
     Returns ``None`` for task types without a known default (the project is
     still created; callers can manage templates manually).
     """
-    if project.task_type not in DEFAULT_TEMPLATE_NAME:
+    defaults = DEFAULT_TEMPLATES.get(project.task_type)
+    if defaults is None:
         return None
 
-    name = DEFAULT_TEMPLATE_NAME[project.task_type]
     existing = (
         db.query(TaskTemplate)
-        .filter(TaskTemplate.project_id == project.id, TaskTemplate.name == name)
+        .filter(
+            TaskTemplate.project_id == project.id,
+            TaskTemplate.name == defaults["name"],
+        )
         .first()
     )
     if existing is not None:
@@ -58,9 +53,9 @@ def ensure_default_template(db: Session, project: Project) -> TaskTemplate | Non
 
     template = TaskTemplate(
         project_id=project.id,
-        name=name,
-        instructions=DEFAULT_TEMPLATE_INSTRUCTIONS[project.task_type],
-        label_schema=DEFAULT_TEMPLATE_LABEL_SCHEMA[project.task_type],
+        name=defaults["name"],
+        instructions=defaults["instructions"],
+        label_schema=defaults["label_schema"],
         version=1,
     )
     db.add(template)

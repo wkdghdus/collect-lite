@@ -39,6 +39,7 @@ from app.services.ingestion import (
     parse_jsonl,
 )
 from app.services.task_generation import generate_tasks_for_project
+from app.services.task_templates import ensure_default_template
 
 PROJECT_NAME = "RAG Relevance Demo"
 PROJECT_TASK_TYPE = "rag_relevance"
@@ -247,8 +248,6 @@ def _ensure_dataset_and_examples(
 
 
 def _ensure_template(db: Session, project: Project, report: SeedReport) -> TaskTemplate:
-    from app.services.task_templates import ensure_default_template
-
     existing_count = (
         db.query(TaskTemplate)
         .filter(TaskTemplate.project_id == project.id, TaskTemplate.name == TEMPLATE_NAME)

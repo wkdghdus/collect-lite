@@ -5,12 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.project import Project
 from app.models.task import TaskTemplate
-from app.services.task_templates import (
-    DEFAULT_TEMPLATE_INSTRUCTIONS,
-    DEFAULT_TEMPLATE_LABEL_SCHEMA,
-    DEFAULT_TEMPLATE_NAME,
-    ensure_default_template,
-)
+from app.services.task_templates import DEFAULT_TEMPLATES, ensure_default_template
 
 
 def test_health(client: TestClient) -> None:
@@ -64,9 +59,10 @@ def test_create_rag_relevance_project_seeds_default_template(
     templates = db_session.query(TaskTemplate).filter(TaskTemplate.project_id == project_id).all()
     assert len(templates) == 1
     template = templates[0]
-    assert template.name == DEFAULT_TEMPLATE_NAME["rag_relevance"]
-    assert template.instructions == DEFAULT_TEMPLATE_INSTRUCTIONS["rag_relevance"]
-    assert template.label_schema == DEFAULT_TEMPLATE_LABEL_SCHEMA["rag_relevance"]
+    defaults = DEFAULT_TEMPLATES["rag_relevance"]
+    assert template.name == defaults["name"]
+    assert template.instructions == defaults["instructions"]
+    assert template.label_schema == defaults["label_schema"]
     assert template.version == 1
 
 
