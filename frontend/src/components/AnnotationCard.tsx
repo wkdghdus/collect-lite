@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatStatus } from "@/lib/formatStatus";
-import type { TaskDetailResponse, TaskResponse } from "@/lib/schemas/task";
+import type {
+  AnnotationSummary,
+  TaskDetailResponse,
+  TaskResponse,
+} from "@/lib/schemas/task";
 
 const RELEVANCE_OPTIONS = ["relevant", "partially_relevant", "not_relevant"] as const;
 type RelevanceValue = (typeof RELEVANCE_OPTIONS)[number];
+
+export type AnnotationCardMode = "create" | "edit" | "locked";
 
 interface AnnotationCardProps {
   task: TaskResponse | TaskDetailResponse;
@@ -16,10 +22,20 @@ interface AnnotationCardProps {
   onSubmit: (label: Record<string, unknown>, confidence: number) => Promise<void>;
   onSkip: () => Promise<void>;
   submitDisabled?: boolean;
+  mode?: AnnotationCardMode;
+  existingAnnotation?: AnnotationSummary | null;
 }
 
 function isDetail(task: TaskResponse | TaskDetailResponse): task is TaskDetailResponse {
   return "query" in task && "candidate_document" in task;
+}
+
+function readRelevance(annotation: AnnotationSummary | null | undefined): RelevanceValue | null {
+  if (!annotation) return null;
+  const value = annotation.label?.relevance;
+  return typeof value === "string" && (RELEVANCE_OPTIONS as readonly string[]).includes(value)
+    ? (value as RelevanceValue)
+    : null;
 }
 
 export function AnnotationCard({
@@ -28,16 +44,28 @@ export function AnnotationCard({
   onSubmit,
   onSkip,
   submitDisabled,
+  mode = "create",
+  existingAnnotation = null,
 }: AnnotationCardProps) {
-  const [confidence, setConfidence] = useState(3);
+  const [confidence, setConfidence] = useState<number>(existingAnnotation?.confidence ?? 3);
   const [submitting, setSubmitting] = useState(false);
   const [skipping, setSkipping] = useState(false);
-  const [relevance, setRelevance] = useState<RelevanceValue | null>(null);
+  const [relevance, setRelevance] = useState<RelevanceValue | null>(
+    readRelevance(existingAnnotation),
+  );
+
+  useEffect(() => {
+    setRelevance(readRelevance(existingAnnotation));
+    setConfidence(existingAnnotation?.confidence ?? 3);
+  }, [existingAnnotation?.id, existingAnnotation?.confidence, existingAnnotation?.label]);
 
   const isRagRelevance = taskType === "rag_relevance";
   const detail = isDetail(task) ? task : null;
+  const isLocked = mode === "locked";
+  const isEditing = mode === "edit";
 
   async function handleSubmit() {
+    if (isLocked) return;
     if (isRagRelevance && !relevance) return;
     setSubmitting(true);
     try {
@@ -49,6 +77,7 @@ export function AnnotationCard({
   }
 
   async function handleSkip() {
+    if (isLocked || isEditing) return;
     setSkipping(true);
     try {
       await onSkip();
@@ -58,8 +87,19 @@ export function AnnotationCard({
   }
 
   const busy = submitting || skipping;
+  const inputsDisabled = busy || isLocked;
   const submitLocked =
-    busy || submitDisabled === true || (isRagRelevance && !relevance);
+    busy ||
+    isLocked ||
+    submitDisabled === true ||
+    (isRagRelevance && !relevance);
+  const submitLabel = isEditing
+    ? submitting
+      ? "Saving…"
+      : "Save changes"
+    : submitting
+      ? "Submitting…"
+      : "Submit";
 
   return (
     <Card>
@@ -96,15 +136,15 @@ export function AnnotationCard({
         )}
 
         {isRagRelevance ? (
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-2" disabled={inputsDisabled}>
             <legend className="text-sm font-medium">Relevance label</legend>
             <div className="flex flex-wrap gap-3">
               {RELEVANCE_OPTIONS.map((option) => (
                 <label
                   key={option}
-                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer ${
-                    relevance === option ? "border-primary bg-primary/10" : ""
-                  }`}
+                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                    inputsDisabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                  } ${relevance === option ? "border-primary bg-primary/10" : ""}`}
                 >
                   <input
                     type="radio"
@@ -112,7 +152,7 @@ export function AnnotationCard({
                     value={option}
                     checked={relevance === option}
                     onChange={() => setRelevance(option)}
-                    disabled={busy}
+                    disabled={inputsDisabled}
                   />
                   {formatStatus(option)}
                 </label>
@@ -128,23 +168,31 @@ export function AnnotationCard({
               key={v}
               type="button"
               onClick={() => setConfidence(v)}
-              disabled={busy}
+              disabled={inputsDisabled}
               className={`h-8 w-8 rounded text-sm border ${
                 confidence === v ? "bg-primary text-primary-foreground" : ""
-              }`}
+              } ${inputsDisabled ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               {v}
             </button>
           ))}
         </div>
-        <div className="flex gap-3">
-          <Button onClick={handleSubmit} disabled={submitLocked}>
-            {submitting ? "Submitting…" : "Submit"}
-          </Button>
-          <Button variant="outline" onClick={handleSkip} disabled={busy}>
-            {skipping ? "Skipping…" : "Skip"}
-          </Button>
-        </div>
+        {isLocked ? (
+          <p className="text-xs text-muted-foreground">
+            This annotation can no longer be edited from this screen.
+          </p>
+        ) : (
+          <div className="flex gap-3">
+            <Button onClick={handleSubmit} disabled={submitLocked}>
+              {submitLabel}
+            </Button>
+            {isEditing ? null : (
+              <Button variant="outline" onClick={handleSkip} disabled={busy}>
+                {skipping ? "Skipping…" : "Skip"}
+              </Button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

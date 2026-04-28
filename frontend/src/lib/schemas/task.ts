@@ -52,10 +52,12 @@ export type ModelSuggestionPayload = z.infer<typeof ModelSuggestionPayloadSchema
 
 export const AnnotationSummarySchema = z.object({
   id: z.string().uuid(),
+  annotator_id: z.string().uuid(),
   label: z.record(z.unknown()),
   confidence: z.number().int().nullable().optional(),
   notes: z.string().nullable().optional(),
   created_at: z.string(),
+  updated_at: z.string(),
 });
 
 export type AnnotationSummary = z.infer<typeof AnnotationSummarySchema>;

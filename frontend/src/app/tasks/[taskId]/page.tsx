@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -10,12 +10,22 @@ import { FlashMessage } from "@/components/FlashMessage";
 import { ModelSuggestionPanel } from "@/components/ModelSuggestionPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatStatus } from "@/lib/formatStatus";
 import type {
+  AnnotationSummary,
   ModelSuggestionResponse,
   TaskDetailResponse,
   TaskResponse,
 } from "@/lib/schemas/task";
 import type { UserResponse } from "@/lib/schemas/user";
+
+const LOCKED_STATUSES = ["needs_review", "resolved", "exported"] as const;
+type LockedStatus = (typeof LOCKED_STATUSES)[number];
+type AnnotationMode = "create" | "edit" | "locked";
+
+function isLockedStatus(status: string): status is LockedStatus {
+  return (LOCKED_STATUSES as readonly string[]).includes(status);
+}
 
 export default function TaskWorkbenchPage({ params }: { params: { taskId: string } }) {
   const { taskId } = params;
@@ -62,6 +72,18 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
       ? latest.suggestion.relevance
       : null;
 
+  const myAnnotation: AnnotationSummary | null = useMemo(() => {
+    if (!task || !selectedAnnotatorId) return null;
+    return task.annotations.find((a) => a.annotator_id === selectedAnnotatorId) ?? null;
+  }, [task, selectedAnnotatorId]);
+
+  const taskLocked = !!task && isLockedStatus(task.status);
+  const mode: AnnotationMode = myAnnotation
+    ? taskLocked
+      ? "locked"
+      : "edit"
+    : "create";
+
   async function navigateNext() {
     if (!task) return;
     try {
@@ -90,6 +112,18 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
       return;
     }
     try {
+      if (mode === "edit" && myAnnotation) {
+        await api.patch(`/api/tasks/${task.id}/annotations/${myAnnotation.id}`, {
+          annotator_id: selectedAnnotatorId,
+          label,
+          confidence,
+          model_suggestion_visible: latest != null,
+        });
+        setFlash("Annotation updated.");
+        queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+        queryClient.invalidateQueries({ queryKey: ["tasks", task.project_id] });
+        return;
+      }
       await api.post(`/api/tasks/${task.id}/annotations`, {
         annotator_id: selectedAnnotatorId,
         label,
@@ -120,6 +154,22 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
   }
 
   const projectTaskType = "rag_relevance";
+  const banner =
+    mode === "edit" ? (
+      <div
+        role="status"
+        className="rounded-md border border-primary/40 bg-primary/10 px-4 py-3 text-sm"
+      >
+        You have already annotated this task — editing your submission.
+      </div>
+    ) : mode === "locked" && task ? (
+      <div
+        role="status"
+        className="rounded-md border border-muted-foreground/30 bg-muted/40 px-4 py-3 text-sm"
+      >
+        Annotation locked — task is {formatStatus(task.status)}.
+      </div>
+    ) : null;
 
   return (
     <AppShell>
@@ -169,6 +219,8 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
         ) : null}
       </section>
 
+      {banner ? <div className="mb-4">{banner}</div> : null}
+
       {taskQuery.isLoading ? (
         <p className="text-muted-foreground">Loading task…</p>
       ) : taskQuery.isError ? (
@@ -183,6 +235,8 @@ export default function TaskWorkbenchPage({ params }: { params: { taskId: string
           onSubmit={handleSubmit}
           onSkip={handleSkip}
           submitDisabled={!selectedAnnotatorId}
+          mode={mode}
+          existingAnnotation={myAnnotation}
         />
       ) : null}
     </AppShell>
