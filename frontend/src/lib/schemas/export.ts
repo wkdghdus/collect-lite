@@ -10,6 +10,7 @@ export const ExportResponseSchema = z.object({
   format: z.enum(["jsonl", "csv"]),
   status: z.enum(["queued", "running", "completed", "failed"]),
   file_path: z.string().nullable(),
+  row_count: z.number(),
   schema_version: z.string(),
   created_at: z.string(),
 });
