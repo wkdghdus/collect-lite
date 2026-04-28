@@ -1,101 +1,137 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { AppShell } from "@/components/AppShell";
-import { ExportBuilder } from "@/components/ExportBuilder";
 import { Badge } from "@/components/ui/badge";
-import type { ExportResponse } from "@/lib/schemas/export";
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
+import type { ExportCreate, ExportResponse } from "@/lib/schemas/export";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-function ExportRow({ exportId }: { exportId: string }) {
-  // Polls while status is not terminal. A future GET /api/projects/{id}/exports
-  // list endpoint should replace this useState-based tracking.
-  const { data, isError, error } = useQuery<ExportResponse>({
-    queryKey: ["export", exportId],
-    queryFn: () => api.get<ExportResponse>(`/api/exports/${exportId}`),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
-    },
-    retry: false,
-  });
+const FORMATS: ExportCreate["format"][] = ["jsonl", "csv"];
 
-  if (isError) {
-    return (
-      <tr className="border-t">
-        <td className="p-3 font-mono text-xs">{exportId.slice(0, 8)}…</td>
-        <td className="p-3" colSpan={3}>
-          <span className="text-destructive">
-            {error instanceof Error ? error.message : "Failed to load export"}
-          </span>
-        </td>
-      </tr>
-    );
-  }
+const FORMAT_LABEL: Record<ExportCreate["format"], string> = {
+  jsonl: "Generate JSONL export",
+  csv: "Generate CSV export",
+};
 
-  return (
-    <tr className="border-t">
-      <td className="p-3 font-mono text-xs">{exportId.slice(0, 8)}…</td>
-      <td className="p-3">{data?.format ?? "—"}</td>
-      <td className="p-3">
-        <Badge variant={data?.status === "completed" ? "default" : "outline"}>
-          {data?.status ?? "…"}
-        </Badge>
-      </td>
-      <td className="p-3">
-        {data?.status === "completed" ? (
-          <a
-            href={`${API_BASE}/api/exports/${exportId}/download`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary hover:underline text-sm"
-          >
-            Download
-          </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">Pending</span>
-        )}
-      </td>
-    </tr>
-  );
+function isTerminal(status: ExportResponse["status"]): boolean {
+  return status === "completed" || status === "failed";
+}
+
+function statusFallbackLabel(status: ExportResponse["status"]): string {
+  if (status === "failed") return "Failed";
+  return "Pending";
 }
 
 export default function ExportsPage({ params }: { params: { projectId: string } }) {
   const { projectId } = params;
-  const [exportIds, setExportIds] = useState<string[]>([]);
+  const queryClient = useQueryClient();
+
+  const exportsQuery = useQuery<ExportResponse[]>({
+    queryKey: ["exports", projectId],
+    queryFn: () => api.get<ExportResponse[]>(`/api/projects/${projectId}/exports`),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || data.length === 0) return false;
+      return data.some((exp) => !isTerminal(exp.status)) ? 2000 : false;
+    },
+  });
+
+  const createExport = useMutation<ExportResponse, Error, ExportCreate>({
+    mutationFn: (body) =>
+      api.post<ExportResponse>(`/api/projects/${projectId}/exports`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["exports", projectId] });
+    },
+  });
+
+  const exports = exportsQuery.data ?? [];
 
   return (
     <AppShell projectId={projectId} section="Exports">
-      <h1 className="text-2xl font-semibold mb-6">Exports</h1>
+      <h1 className="mb-6 text-2xl font-semibold">Exports</h1>
 
-      <div className="mb-8">
-        <ExportBuilder
-          projectId={projectId}
-          onCreated={(exp) => setExportIds((ids) => [exp.id, ...ids])}
-        />
+      <div className="mb-8 flex flex-wrap gap-3">
+        {FORMATS.map((format) => {
+          const isActive =
+            createExport.isPending && createExport.variables?.format === format;
+          return (
+            <Button
+              key={format}
+              onClick={() => createExport.mutate({ format })}
+              disabled={createExport.isPending}
+            >
+              {isActive ? "Creating…" : FORMAT_LABEL[format]}
+            </Button>
+          );
+        })}
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Recent</h2>
-      {exportIds.length === 0 ? (
+      {createExport.isError ? (
+        <p className="mb-6 text-sm text-destructive">
+          Failed to create export: {createExport.error.message}
+        </p>
+      ) : null}
+
+      <h2 className="mb-3 text-lg font-semibold">Recent exports</h2>
+
+      {exportsQuery.isLoading ? (
+        <p className="text-muted-foreground">Loading exports…</p>
+      ) : exportsQuery.isError ? (
+        <p className="text-destructive">
+          Failed to load exports:{" "}
+          {exportsQuery.error instanceof Error
+            ? exportsQuery.error.message
+            : "Unknown error"}
+        </p>
+      ) : exports.length === 0 ? (
         <div className="rounded-xl border p-12 text-center text-muted-foreground">
-          No exports created in this session yet.
+          No exports yet. Generate one above.
         </div>
       ) : (
-        <table className="w-full text-sm border rounded-xl overflow-hidden">
+        <table className="w-full overflow-hidden rounded-xl border text-sm">
           <thead className="bg-muted/50">
             <tr>
-              <th className="text-left p-3">ID</th>
-              <th className="text-left p-3">Format</th>
-              <th className="text-left p-3">Status</th>
-              <th className="text-left p-3">Download</th>
+              <th className="p-3 text-left">Format</th>
+              <th className="p-3 text-left">Rows</th>
+              <th className="p-3 text-left">Status</th>
+              <th className="p-3 text-left">Created</th>
+              <th className="p-3 text-left">Download</th>
             </tr>
           </thead>
           <tbody>
-            {exportIds.map((id) => (
-              <ExportRow key={id} exportId={id} />
+            {exports.map((exp) => (
+              <tr key={exp.id} className="border-t">
+                <td className="p-3">{exp.format.toUpperCase()}</td>
+                <td className="p-3">{exp.row_count}</td>
+                <td className="p-3">
+                  <Badge variant={exp.status === "completed" ? "default" : "outline"}>
+                    {exp.status}
+                  </Badge>
+                </td>
+                <td className="p-3 text-muted-foreground">
+                  {new Date(exp.created_at).toLocaleString()}
+                </td>
+                <td className="p-3">
+                  {exp.status === "completed" ? (
+                    <a
+                      href={`${API_BASE}/api/exports/${exp.id}/download`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Download
+                    </a>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {statusFallbackLabel(exp.status)}
+                    </span>
+                  )}
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
