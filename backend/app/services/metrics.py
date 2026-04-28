@@ -89,9 +89,7 @@ def compute_project_metrics(db: Session, project_id: uuid.UUID) -> dict:
             .all()
         )
         for s in suggestion_rows:
-            consensus = consensus_by_task.get(s.task_id)
-            if consensus is None:
-                continue
+            consensus = consensus_by_task[s.task_id]
             denom += 1
             human_label = (
                 consensus.final_label.get(LABEL_KEY)

@@ -16,7 +16,7 @@ from app.models import (
 from app.services.consensus import compute_consensus
 
 
-def _seed_project(db_session, *, name: str = "P") -> Project:
+def _seed_project(db_session, *, name: str = "P") -> tuple[Project, Dataset, TaskTemplate]:
     project = Project(name=name, task_type="rag_relevance")
     db_session.add(project)
     db_session.flush()
@@ -28,16 +28,19 @@ def _seed_project(db_session, *, name: str = "P") -> Project:
         label_schema={"type": "string"},
     )
     db_session.add_all([dataset, template])
-    db_session.flush()
-    project._dataset_id = dataset.id
-    project._template_id = template.id
     db_session.commit()
-    return project
+    return project, dataset, template
 
 
-def _add_task(db_session, project: Project, *, status: str) -> Task:
+def _add_task(
+    db_session,
+    fixture: tuple[Project, Dataset, TaskTemplate],
+    *,
+    status: str,
+) -> Task:
+    project, dataset, template = fixture
     example = SourceExample(
-        dataset_id=project._dataset_id,
+        dataset_id=dataset.id,
         project_id=project.id,
         source_hash=f"h-{uuid.uuid4()}",
         payload={"text": "x"},
@@ -47,7 +50,7 @@ def _add_task(db_session, project: Project, *, status: str) -> Task:
     task = Task(
         project_id=project.id,
         example_id=example.id,
-        template_id=project._template_id,
+        template_id=template.id,
         status=status,
     )
     db_session.add(task)
@@ -85,8 +88,12 @@ def _attach_suggestion(db_session, task: Task, suggestion: dict) -> None:
     db_session.commit()
 
 
-def _resolve_with_humans(db_session, project: Project, label_values: list[str]) -> Task:
-    task = _add_task(db_session, project, status="submitted")
+def _resolve_with_humans(
+    db_session,
+    fixture: tuple[Project, Dataset, TaskTemplate],
+    label_values: list[str],
+) -> Task:
+    task = _add_task(db_session, fixture, status="submitted")
     _attach_annotations(db_session, task, label_values)
     compute_consensus(db_session, task.id)
     db_session.expire_all()
@@ -100,7 +107,7 @@ def test_metrics_unknown_project_returns_404(client) -> None:
 
 
 def test_metrics_empty_project_returns_zeros(client, db_session) -> None:
-    project = _seed_project(db_session)
+    project, _, _ = _seed_project(db_session)
 
     response = client.get(f"/api/projects/{project.id}/metrics")
     assert response.status_code == 200
@@ -122,7 +129,8 @@ def test_metrics_empty_project_returns_zeros(client, db_session) -> None:
 
 
 def test_metrics_status_counts_sum_to_total(client, db_session) -> None:
-    project = _seed_project(db_session)
+    fixture = _seed_project(db_session)
+    project = fixture[0]
     plan = {
         "created": 2,
         "suggested": 1,
@@ -134,7 +142,7 @@ def test_metrics_status_counts_sum_to_total(client, db_session) -> None:
     }
     for status, n in plan.items():
         for _ in range(n):
-            _add_task(db_session, project, status=status)
+            _add_task(db_session, fixture, status=status)
 
     response = client.get(f"/api/projects/{project.id}/metrics")
     assert response.status_code == 200
@@ -160,10 +168,11 @@ def test_metrics_status_counts_sum_to_total(client, db_session) -> None:
 
 
 def test_metrics_label_distribution(client, db_session) -> None:
-    project = _seed_project(db_session)
-    _resolve_with_humans(db_session, project, ["relevant", "relevant"])
-    _resolve_with_humans(db_session, project, ["relevant", "relevant"])
-    _resolve_with_humans(db_session, project, ["not_relevant", "not_relevant"])
+    fixture = _seed_project(db_session)
+    project = fixture[0]
+    _resolve_with_humans(db_session, fixture, ["relevant", "relevant"])
+    _resolve_with_humans(db_session, fixture, ["relevant", "relevant"])
+    _resolve_with_humans(db_session, fixture, ["not_relevant", "not_relevant"])
 
     response = client.get(f"/api/projects/{project.id}/metrics")
     assert response.status_code == 200
@@ -172,9 +181,10 @@ def test_metrics_label_distribution(client, db_session) -> None:
 
 
 def test_metrics_avg_human_agreement(client, db_session) -> None:
-    project = _seed_project(db_session)
-    _resolve_with_humans(db_session, project, ["relevant", "relevant"])
-    _resolve_with_humans(db_session, project, ["relevant", "relevant", "not_relevant"])
+    fixture = _seed_project(db_session)
+    project = fixture[0]
+    _resolve_with_humans(db_session, fixture, ["relevant", "relevant"])
+    _resolve_with_humans(db_session, fixture, ["relevant", "relevant", "not_relevant"])
 
     response = client.get(f"/api/projects/{project.id}/metrics")
     assert response.status_code == 200
@@ -183,15 +193,16 @@ def test_metrics_avg_human_agreement(client, db_session) -> None:
 
 
 def test_metrics_model_agreement_rate(client, db_session) -> None:
-    project = _seed_project(db_session)
+    fixture = _seed_project(db_session)
+    project = fixture[0]
 
-    matching = _resolve_with_humans(db_session, project, ["relevant", "relevant"])
+    matching = _resolve_with_humans(db_session, fixture, ["relevant", "relevant"])
     _attach_suggestion(db_session, matching, {"relevance": "relevant"})
 
-    disagreeing = _resolve_with_humans(db_session, project, ["relevant", "relevant"])
+    disagreeing = _resolve_with_humans(db_session, fixture, ["relevant", "relevant"])
     _attach_suggestion(db_session, disagreeing, {"relevance": "not_relevant"})
 
-    _resolve_with_humans(db_session, project, ["relevant", "relevant"])
+    _resolve_with_humans(db_session, fixture, ["relevant", "relevant"])
 
     response = client.get(f"/api/projects/{project.id}/metrics")
     assert response.status_code == 200
@@ -200,16 +211,18 @@ def test_metrics_model_agreement_rate(client, db_session) -> None:
 
 
 def test_metrics_isolation_across_projects(client, db_session) -> None:
-    project_a = _seed_project(db_session, name="A")
-    project_b = _seed_project(db_session, name="B")
+    fixture_a = _seed_project(db_session, name="A")
+    fixture_b = _seed_project(db_session, name="B")
+    project_a = fixture_a[0]
+    project_b = fixture_b[0]
 
     for _ in range(3):
-        _add_task(db_session, project_a, status="created")
-    _resolve_with_humans(db_session, project_a, ["relevant", "relevant"])
+        _add_task(db_session, fixture_a, status="created")
+    _resolve_with_humans(db_session, fixture_a, ["relevant", "relevant"])
 
     for _ in range(5):
-        _add_task(db_session, project_b, status="resolved")
-    _resolve_with_humans(db_session, project_b, ["not_relevant", "not_relevant"])
+        _add_task(db_session, fixture_b, status="resolved")
+    _resolve_with_humans(db_session, fixture_b, ["not_relevant", "not_relevant"])
 
     response_a = client.get(f"/api/projects/{project_a.id}/metrics")
     response_b = client.get(f"/api/projects/{project_b.id}/metrics")
