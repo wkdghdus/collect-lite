@@ -17,6 +17,21 @@ Services:
 - Backend API: http://localhost:8000
 - API Docs (Swagger): http://localhost:8000/docs
 
+### Seed demo data
+
+Once the stack is running, populate it with a demo-ready RAG-relevance project
+(users, dataset, tasks, model suggestions, annotations, consensus, and one
+review decision so the metrics dashboard renders non-empty):
+
+```bash
+docker compose exec backend python -m scripts.seed
+```
+
+The script is idempotent — re-running it adds zero rows. Use
+`--no-suggestions` or `--no-annotations` to skip the optional walk through
+the task state machine, or `--sample-path /path/to/file.jsonl` to seed from
+a custom dataset.
+
 ## Manual Dev Setup
 
 ### Backend
@@ -27,6 +42,7 @@ python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 alembic upgrade head
+python -m scripts.seed      # optional: populate demo data
 uvicorn app.main:app --reload
 ```
 

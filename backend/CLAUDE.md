@@ -9,6 +9,7 @@ FastAPI + Python 3.11. Entry point: `app/main.py` → http://localhost:8000
 - **API docs:** http://localhost:8000/docs (Swagger UI, auto-generated)
 - **Migrate:** `alembic upgrade head`
 - **New migration:** `alembic revision --autogenerate -m "description"`
+- **Seed demo data:** `python -m scripts.seed` (idempotent; flags `--no-suggestions`, `--no-annotations`, `--sample-path PATH`)
 - **Test:** `pytest tests/ -v`
 - **Lint:** `ruff check .`
 - **Format:** `black .`
