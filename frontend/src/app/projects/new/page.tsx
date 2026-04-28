@@ -13,13 +13,14 @@ import {
   type ProjectResponse,
 } from "@/lib/schemas/project";
 
-const TASK_TYPES: { value: ProjectCreate["task_type"]; comingSoon: boolean }[] = [
-  { value: "rag_relevance", comingSoon: false },
-  { value: "pairwise_preference", comingSoon: true },
-  { value: "relevance_rating", comingSoon: true },
-  { value: "classification", comingSoon: true },
-  { value: "extraction_qa", comingSoon: true },
-  { value: "freeform_critique", comingSoon: true },
+const AVAILABLE_TASK_TYPES: ProjectCreate["task_type"][] = ["rag_relevance"];
+
+const COMING_SOON_TASK_TYPES: ProjectCreate["task_type"][] = [
+  "pairwise_preference",
+  "relevance_rating",
+  "classification",
+  "extraction_qa",
+  "freeform_critique",
 ];
 
 const inputClass =
@@ -84,11 +85,18 @@ export default function NewProjectPage() {
             Task Type
           </label>
           <select id="task_type" className={inputClass} {...register("task_type")}>
-            {TASK_TYPES.map((t) => (
-              <option key={t.value} value={t.value} disabled={t.comingSoon}>
-                {t.comingSoon ? `${t.value} (coming soon)` : t.value}
+            {AVAILABLE_TASK_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
               </option>
             ))}
+            <optgroup label="Coming soon">
+              {COMING_SOON_TASK_TYPES.map((t) => (
+                <option key={t} value={t} disabled>
+                  {t}
+                </option>
+              ))}
+            </optgroup>
           </select>
           {errors.task_type ? (
             <p className="text-sm text-destructive mt-1">{errors.task_type.message}</p>
