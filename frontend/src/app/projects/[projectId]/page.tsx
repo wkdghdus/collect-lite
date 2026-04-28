@@ -8,18 +8,13 @@ import { MetricsCard } from "@/components/MetricsCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import type { ProjectResponse } from "@/lib/schemas/project";
-
-interface ProjectMetrics {
-  tasks_total?: number;
-  tasks_resolved?: number;
-  review_backlog?: number;
-}
+import type { ProjectMetricsResponse } from "@/lib/schemas/metrics";
 
 const SECTIONS = [
   { slug: "datasets", title: "Datasets", desc: "Upload CSV / JSONL data" },
   { slug: "tasks", title: "Tasks", desc: "Generate and run task queue" },
   { slug: "review", title: "Review", desc: "Resolve disagreements" },
-  { slug: "metrics", title: "Metrics", desc: "Agreement, accuracy, latency" },
+  { slug: "metrics", title: "Metrics", desc: "Workflow funnel + agreement" },
   { slug: "exports", title: "Exports", desc: "Create and download exports" },
 ];
 
@@ -31,17 +26,17 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     queryFn: () => api.get<ProjectResponse>(`/api/projects/${projectId}`),
   });
 
-  const metricsQuery = useQuery<ProjectMetrics>({
+  const metricsQuery = useQuery<ProjectMetricsResponse>({
     queryKey: ["metrics", projectId],
-    queryFn: () => api.get<ProjectMetrics>(`/api/projects/${projectId}/metrics`),
+    queryFn: () => api.get<ProjectMetricsResponse>(`/api/projects/${projectId}/metrics`),
     retry: false,
   });
 
   const project = projectQuery.data;
   const metrics = metricsQuery.data;
   const resolvedPct =
-    metrics?.tasks_total && metrics?.tasks_resolved
-      ? `${((metrics.tasks_resolved / metrics.tasks_total) * 100).toFixed(0)}%`
+    metrics && metrics.total_tasks > 0
+      ? `${((metrics.resolved_count / metrics.total_tasks) * 100).toFixed(0)}%`
       : "—";
 
   return (
@@ -59,8 +54,8 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
           <p className="text-sm text-muted-foreground mb-8">{project.task_type}</p>
 
           <div className="grid grid-cols-3 gap-4 mb-8">
-            <MetricsCard label="Tasks Total" value={metrics?.tasks_total ?? "—"} />
-            <MetricsCard label="Pending Review" value={metrics?.review_backlog ?? "—"} />
+            <MetricsCard label="Tasks Total" value={metrics?.total_tasks ?? "—"} />
+            <MetricsCard label="Pending Review" value={metrics?.needs_review_count ?? "—"} />
             <MetricsCard label="Resolved" value={resolvedPct} />
           </div>
 
