@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     debug: bool = True
     allowed_origins: str = "http://localhost:3000"
+    exports_dir: str = "exports"
 
     @property
     def origins_list(self) -> list[str]:

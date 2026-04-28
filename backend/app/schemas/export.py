@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 
 class ExportCreate(BaseModel):
-    format: str = "jsonl"
+    format: Literal["jsonl", "csv"] = "jsonl"
 
 
 class ExportResponse(BaseModel):
@@ -14,6 +15,7 @@ class ExportResponse(BaseModel):
     format: str
     status: str
     file_path: str | None
+    row_count: int
     schema_version: str
     created_at: datetime
 
