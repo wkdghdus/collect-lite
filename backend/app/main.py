@@ -15,6 +15,7 @@ from app.routers import (
     reviews,
     suggestions,
     tasks,
+    users,
 )
 
 
@@ -61,3 +62,4 @@ app.include_router(consensus.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(exports.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
