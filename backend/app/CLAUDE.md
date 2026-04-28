@@ -14,7 +14,7 @@ FastAPI application package.
 |---------|---------|
 | `models/` | 14 SQLAlchemy ORM models (one file per domain: user, project, dataset, task, annotation, quality, export, audit) |
 | `schemas/` | Pydantic v2 request/response models matching each router |
-| `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks` + `tasks.get_task` (GET `/tasks/{task_id}` returns a `TaskDetailResponse` with embedded source-payload fields, latest model suggestion, and annotation summaries) + `tasks.create_task_suggestion` (POST `/tasks/{task_id}/suggestion`), `suggestions.list_suggestions` (GET `/tasks/{task_id}/suggestions`, newest-first), `annotations.submit_annotation`, and `reviews.list_review_tasks` (GET `/projects/{project_id}/review/tasks`) + `reviews.submit_review` (POST `/tasks/{task_id}/review`) are implemented; the batch `POST /projects/{project_id}/tasks/suggest`, the plural batch `POST /tasks/{task_id}/suggestions`, `tasks.get_next_task`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
+| `routers/` | 9 APIRouter files — `projects`, `datasets` (upload + list), `tasks.generate_tasks` + `tasks.list_project_tasks` + `tasks.get_task` (GET `/tasks/{task_id}` returns a `TaskDetailResponse` with embedded source-payload fields, latest model suggestion, and annotation summaries) + `tasks.create_task_suggestion` (POST `/tasks/{task_id}/suggestion`), `suggestions.list_suggestions` (GET `/tasks/{task_id}/suggestions`, newest-first), `annotations.submit_annotation`, `reviews.list_review_tasks` (GET `/projects/{project_id}/review/tasks`) + `reviews.submit_review` (POST `/tasks/{task_id}/review`), and `exports.create_export` (POST `/projects/{project_id}/exports`) + `exports.list_exports` (GET `/projects/{project_id}/exports`) + `exports.get_export` (GET `/exports/{export_id}`) + `exports.download_export` (GET `/exports/{export_id}/download`) are implemented; the batch `POST /projects/{project_id}/tasks/suggest`, the plural batch `POST /tasks/{task_id}/suggestions`, `tasks.get_next_task`, `annotations.skip_task`, and the other routers remain stubbed with `raise NotImplementedError` |
 | `services/` | Business logic called by routers (ingestion, task_generation, assignment, model_suggestions, cohere_service, consensus, review, export, audit) |
 | `workers/` | `jobs.py` — FastAPI BackgroundTasks wrappers for async jobs |
 
@@ -49,8 +49,18 @@ omitted, the service lazily reuses (or creates) a singleton system reviewer
 
 Return **409 Conflict** on invalid transitions. Never skip states.
 
+The `resolved → exported` transition is driven by `services/export.run_export_job`,
+scheduled as a background task by `routers/exports.create_export` (POST
+`/projects/{project_id}/exports`). The job assembles one row per resolved task
+from `SourceExample.payload` + latest `ConsensusResult` + latest `ModelSuggestion`
+(plus `ReviewDecision` existence for `label_source`), serialises to JSONL or CSV
+under `settings.exports_dir`, persists `Export.file_path` + `Export.row_count` +
+`Export.status='completed'`, and only then flips each included `Task.status` to
+`exported`. Failure rolls back: `Export.status='failed'`, partial file deleted,
+task statuses untouched.
+
 ## Idempotency Rules
 
 - Dataset rows: deduplicated by `source_hash` (SHA-256 of JSON payload)
 - Task generation: idempotent by `(project_id, example_id, template_id)`
-- Exports: versioned by `schema_version` + `file_path`
+- Exports: versioned by `schema_version` + `file_path`; re-running `POST /projects/{id}/exports` skips tasks already at `status='exported'`, so repeated calls are safe (the second export's `row_count` is 0)
