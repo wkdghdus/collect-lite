@@ -42,27 +42,30 @@ export function TaskQueueTable({ tasks, onSelect }: TaskQueueTableProps) {
         <tr>
           <th className="text-left p-3">Task ID</th>
           <th className="text-left p-3">Status</th>
-          <th className="text-left p-3">Priority</th>
-          <th className="text-left p-3">Required</th>
+          <th className="text-left p-3">Annotations</th>
           <th className="text-left p-3">Created</th>
         </tr>
       </thead>
       <tbody>
-        {tasks.map((task) => (
-          <tr
-            key={task.id}
-            onClick={() => onSelect(task.id)}
-            className="border-t cursor-pointer hover:bg-muted/30"
-          >
-            <td className="p-3 font-mono text-xs">{truncateId(task.id)}</td>
-            <td className="p-3">
-              <Badge variant={statusVariant[task.status] ?? "outline"}>{formatStatus(task.status)}</Badge>
-            </td>
-            <td className="p-3">{task.priority}</td>
-            <td className="p-3">{task.required_annotations}</td>
-            <td className="p-3 text-muted-foreground">{formatDate(task.created_at)}</td>
-          </tr>
-        ))}
+        {tasks.map((task) => {
+          const complete = task.annotation_count >= task.required_annotations;
+          return (
+            <tr
+              key={task.id}
+              onClick={() => onSelect(task.id)}
+              className="border-t cursor-pointer hover:bg-muted/30"
+            >
+              <td className="p-3 font-mono text-xs">{truncateId(task.id)}</td>
+              <td className="p-3">
+                <Badge variant={statusVariant[task.status] ?? "outline"}>{formatStatus(task.status)}</Badge>
+              </td>
+              <td className={`p-3 ${complete ? "font-semibold" : "text-muted-foreground"}`}>
+                {task.annotation_count} / {task.required_annotations}
+              </td>
+              <td className="p-3 text-muted-foreground">{formatDate(task.created_at)}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

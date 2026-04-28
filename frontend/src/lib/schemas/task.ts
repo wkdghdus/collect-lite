@@ -8,6 +8,7 @@ export const TaskResponseSchema = z.object({
   status: z.enum(["created", "suggested", "assigned", "submitted", "needs_review", "resolved", "exported"]),
   priority: z.number(),
   required_annotations: z.number(),
+  annotation_count: z.number().default(0),
   created_at: z.string(),
   updated_at: z.string(),
 });
