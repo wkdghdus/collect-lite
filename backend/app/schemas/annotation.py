@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RelevanceLabel(BaseModel):
@@ -10,10 +10,18 @@ class RelevanceLabel(BaseModel):
 
 
 class AnnotationCreate(BaseModel):
-    assignment_id: uuid.UUID
+    assignment_id: uuid.UUID | None = None
+    annotator_id: uuid.UUID | None = None
     label: RelevanceLabel
     confidence: int | None = Field(default=None, ge=1, le=5)
     notes: str | None = None
+    model_suggestion_visible: bool = False
+
+    @model_validator(mode="after")
+    def _require_assignment_or_annotator(self) -> "AnnotationCreate":
+        if self.assignment_id is None and self.annotator_id is None:
+            raise ValueError("Either assignment_id or annotator_id must be provided")
+        return self
 
 
 class AnnotationResponse(BaseModel):

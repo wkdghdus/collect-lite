@@ -7,11 +7,13 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.annotation import Annotation
 from app.models.task import Assignment, Task
+from app.models.user import User
 from app.schemas.annotation import (
     AnnotationCreate,
     AnnotationResponse,
     AnnotationSubmissionResponse,
 )
+from app.services.assignment import ensure_assignment
 from app.workers import jobs
 
 router = APIRouter(tags=["annotations"])
@@ -39,19 +41,32 @@ def submit_annotation(
             detail=f"Task is {task.status}; cannot annotate",
         )
 
-    assignment = db.query(Assignment).filter(Assignment.id == body.assignment_id).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
-    if assignment.task_id != task_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Assignment does not belong to this task",
+    if body.assignment_id is not None:
+        assignment = (
+            db.query(Assignment).filter(Assignment.id == body.assignment_id).first()
         )
-    if assignment.status != "assigned":
-        raise HTTPException(
-            status_code=409,
-            detail=f"Assignment is {assignment.status}; cannot submit annotation",
-        )
+        if not assignment:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        if assignment.task_id != task_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Assignment does not belong to this task",
+            )
+        if assignment.status != "assigned":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Assignment is {assignment.status}; cannot submit annotation",
+            )
+    else:
+        annotator = db.query(User).filter(User.id == body.annotator_id).first()
+        if annotator is None:
+            raise HTTPException(status_code=404, detail="Annotator not found")
+        assignment = ensure_assignment(db, task_id, body.annotator_id)
+        if assignment.status != "assigned":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Assignment is {assignment.status}; cannot submit annotation",
+            )
 
     annotation = Annotation(
         task_id=task_id,
@@ -60,6 +75,7 @@ def submit_annotation(
         label=body.label.model_dump(),
         confidence=body.confidence,
         notes=body.notes,
+        model_suggestion_visible=body.model_suggestion_visible,
     )
     db.add(annotation)
 

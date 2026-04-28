@@ -231,3 +231,182 @@ def test_consensus_scheduled_not_blocking(client: TestClient, db_session: Sessio
 
     assert response.status_code == 201
     mock.assert_called_once_with(task_id)
+
+
+def _seed_unassigned_task(
+    db: Session,
+    *,
+    required_annotations: int = 2,
+    task_status: str = "suggested",
+):
+    """Seed a project + task WITHOUT any Assignment row (the lazy-assign path)."""
+    project = Project(name="P", task_type="rag_relevance")
+    db.add(project)
+    db.flush()
+    dataset = Dataset(project_id=project.id, filename="d.jsonl", row_count=1)
+    db.add(dataset)
+    db.flush()
+    example = SourceExample(
+        dataset_id=dataset.id,
+        project_id=project.id,
+        source_hash=f"h-{uuid.uuid4()}",
+        payload={"q": "?", "doc": "."},
+    )
+    template = TaskTemplate(
+        project_id=project.id,
+        name="t",
+        instructions="x",
+        label_schema={"type": "object"},
+    )
+    db.add_all([example, template])
+    db.flush()
+    task = Task(
+        project_id=project.id,
+        example_id=example.id,
+        template_id=template.id,
+        status=task_status,
+        required_annotations=required_annotations,
+    )
+    db.add(task)
+    db.commit()
+    return {"task": task, "project": project}
+
+
+def _make_annotator(db: Session, *, email: str | None = None) -> User:
+    user = User(
+        email=email or f"u-{uuid.uuid4()}@example.com",
+        name="Annotator",
+        role="annotator",
+    )
+    db.add(user)
+    db.commit()
+    return user
+
+
+def test_lazy_assignment_creates_row(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_unassigned_task(db_session, required_annotations=2)
+    task = seeded["task"]
+    annotator = _make_annotator(db_session)
+
+    response = client.post(
+        f"/api/tasks/{task.id}/annotations",
+        json={
+            "annotator_id": str(annotator.id),
+            "label": {"relevance": "relevant"},
+            "confidence": 4,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    annotation = body["annotation"]
+    assert annotation["annotator_id"] == str(annotator.id)
+    assignment_id = uuid.UUID(annotation["assignment_id"])
+
+    db_session.expire_all()
+    assignments = (
+        db_session.query(Assignment)
+        .filter(Assignment.task_id == task.id, Assignment.annotator_id == annotator.id)
+        .all()
+    )
+    assert len(assignments) == 1
+    assert assignments[0].id == assignment_id
+    assert assignments[0].status == "submitted"
+    assert (
+        db_session.query(Annotation).filter(Annotation.task_id == task.id).count() == 1
+    )
+
+
+def test_lazy_assignment_reuses_row(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_unassigned_task(db_session, required_annotations=2)
+    task = seeded["task"]
+    annotator = _make_annotator(db_session)
+
+    body = {
+        "annotator_id": str(annotator.id),
+        "label": {"relevance": "relevant"},
+        "confidence": 4,
+    }
+    first = client.post(f"/api/tasks/{task.id}/annotations", json=body)
+    assert first.status_code == 201
+
+    second = client.post(f"/api/tasks/{task.id}/annotations", json=body)
+    # Second call should rejoin the now-submitted assignment as a duplicate-submission 409.
+    assert second.status_code == 409
+
+    db_session.expire_all()
+    assignments = (
+        db_session.query(Assignment)
+        .filter(Assignment.task_id == task.id, Assignment.annotator_id == annotator.id)
+        .all()
+    )
+    assert len(assignments) == 1
+
+
+def test_two_annotators_reach_submitted(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_unassigned_task(db_session, required_annotations=2)
+    task = seeded["task"]
+    alice = _make_annotator(db_session, email="alice-test@example.com")
+    bob = _make_annotator(db_session, email="bob-test@example.com")
+
+    first = client.post(
+        f"/api/tasks/{task.id}/annotations",
+        json={
+            "annotator_id": str(alice.id),
+            "label": {"relevance": "relevant"},
+            "confidence": 4,
+        },
+    )
+    assert first.status_code == 201
+    assert first.json()["task_status"] == "assigned"
+
+    second = client.post(
+        f"/api/tasks/{task.id}/annotations",
+        json={
+            "annotator_id": str(bob.id),
+            "label": {"relevance": "not_relevant"},
+            "confidence": 5,
+        },
+    )
+    assert second.status_code == 201
+    assert second.json()["task_status"] == "submitted"
+
+    db_session.expire_all()
+    assignments = (
+        db_session.query(Assignment).filter(Assignment.task_id == task.id).all()
+    )
+    assert len(assignments) == 2
+    annotator_ids = {a.annotator_id for a in assignments}
+    assert annotator_ids == {alice.id, bob.id}
+    assert (
+        db_session.query(Annotation).filter(Annotation.task_id == task.id).count() == 2
+    )
+
+    refreshed = db_session.get(Task, task.id)
+    # Background consensus runs after the second post — task lands at submitted/needs_review/resolved.
+    assert refreshed.status in {"submitted", "needs_review", "resolved"}
+
+
+def test_missing_annotator_returns_404(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_unassigned_task(db_session)
+    response = client.post(
+        f"/api/tasks/{seeded['task'].id}/annotations",
+        json={
+            "annotator_id": str(uuid.uuid4()),
+            "label": {"relevance": "relevant"},
+            "confidence": 3,
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_missing_both_returns_422(client: TestClient, db_session: Session) -> None:
+    seeded = _seed_unassigned_task(db_session)
+    response = client.post(
+        f"/api/tasks/{seeded['task'].id}/annotations",
+        json={
+            "label": {"relevance": "relevant"},
+            "confidence": 3,
+        },
+    )
+    assert response.status_code == 422
